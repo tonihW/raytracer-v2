@@ -38,6 +38,19 @@ fn main() {
         println!("  model.texcoord_indice_count = {}", m.mesh.texcoord_indices.len());
         println!("  model.face_count = {}", m.mesh.indices.len() / 3);
 
+        let mat = &materials[m.mesh.material_id.unwrap()];
+        println!("  material.name = {}", mat.name);
+        println!("  material.unknown_param_count = {}", mat.unknown_param.len());
+        for (k, v) in &mat.unknown_param {
+            println!("    unknown_param[{}] = {}", k, v);
+        }
+        let mat_emission = &mat.unknown_param["Ke"];
+        let mat_emission = mat_emission
+            .split(" ")
+            .map(|s| s.parse::<f32>().unwrap())
+            .collect::<Vec<_>>();
+        println!("  material.emission = {} {} {}", mat_emission[0], mat_emission[1], mat_emission[2]);
+
         let mut vertices: Vec<Vertex> = Vec::new();
         for i in 0..m.mesh.indices.len() {
             let p_offset = (m.mesh.indices[i] * 3) as usize;
@@ -63,10 +76,11 @@ fn main() {
                     v[2],
                 ],
                 mat: Material {
-                    ambient: Vec3::new(0.0, 0.0, 0.0),
-                    diffuse: Vec3::new(1.0, 1.0, 1.0),
-                    specular: Vec3::new(0.0, 0.0, 0.0),
-                    shininess: 0.0,
+                    ambient: Vec3::new(mat.ambient[0], mat.ambient[1], mat.ambient[2]),
+                    diffuse: Vec3::new(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]),
+                    specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
+                    shininess: mat.shininess,
+                    emission: Vec3::new(mat_emission[0], mat_emission[1], mat_emission[2]),
                 },
                 node_idx: 0,
             });

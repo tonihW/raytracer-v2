@@ -5,4 +5,5 @@ pub struct Material {
     pub diffuse: Vec3,
     pub specular: Vec3,
     pub shininess: f32,
+    pub emission: Vec3,
 }
