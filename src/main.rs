@@ -1,4 +1,5 @@
 pub mod intersection;
+pub mod utils;
 pub mod vertex;
 pub mod triangle;
 pub mod transform;

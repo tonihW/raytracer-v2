@@ -3,10 +3,10 @@ use glam::{Vec3, Quat};
 
 #[derive(Debug)]
 pub struct Camera {
-    trf: Transform,
-    viewport_w: f32,
-    viewport_h: f32,
-    viewport_a: f32,
+    pub trf: Transform,
+    pub viewport_w: f32,
+    pub viewport_h: f32,
+    pub viewport_a: f32,
 }
 
 impl Camera {
