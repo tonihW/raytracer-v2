@@ -2,10 +2,10 @@ use crate::intersection::Intersection;
 use crate::material::Material;
 use crate::utils::EPSILON;
 use crate::vertex::Vertex;
-use glam::{Vec3, Vec2};
 use bvh::aabb::{AABB, Bounded};
 use bvh::bounding_hierarchy::BHShape;
 use bvh::ray::Ray;
+use glam::{Vec3, Vec2};
 
 pub struct Triangle {
     pub vrt: [Vertex; 3],
@@ -63,6 +63,7 @@ impl Triangle {
             pos,
             nrm: self.vrt[0].nrm + b1 * (self.vrt[1].nrm - self.vrt[0].nrm) + b2 * (self.vrt[2].nrm - self.vrt[0].nrm),
             tex: self.vrt[0].tex * b0 + self.vrt[1].tex * b1 + self.vrt[2].tex * b2,
+            mat: self.mat,
         });
     }
 

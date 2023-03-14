@@ -6,15 +6,25 @@ pub mod triangle;
 pub mod transform;
 pub mod camera;
 
-use bvh::bvh::BVH;
+use bvh::{bvh::BVH, ray::Ray};
 use glam::{Vec3, Vec2, Quat};
+use image::{ImageBuffer, RgbImage, ImageFormat};
+use intersection::Intersection;
 use triangle::Triangle;
 use transform::Transform;
 use camera::Camera;
 
-use crate::{vertex::Vertex, material::Material};
+use crate::{vertex::Vertex, material::Material, utils::EPSILON};
+
+const WIDTH: u32 = 1280;
+const HEIGHT: u32 = 720;
+const LIGHT: Vec3 = Vec3::new(0.5, -1.0, 0.4);
+const AMBIENT: Vec3 = Vec3::new(0.4, 0.4, 0.6);
 
 fn main() {
+    // final render buffer
+    let mut render_buf: RgbImage = ImageBuffer::new(WIDTH, HEIGHT);
+
     // scene shapes vector
     let mut scene_shapes: Vec<Triangle> = Vec::new();
 
@@ -27,8 +37,8 @@ fn main() {
         single_index: false,
     };
     let (models, materials) = tobj::load_obj("./res/wirokit.obj", &tobj_load_opts)
-        .expect("Failed to load target OBJ file");
-    let materials = materials.expect("Failed to load target MTL file");
+        .expect("  failed to load target OBJ file");
+    let materials = materials.expect("  failed to load target MTL file");
 
     for m in &models {
         println!("  model.name = \"{}\"", m.name);
@@ -90,9 +100,84 @@ fn main() {
     // construct scene
     println!("constructing scene, shape_count: {} ...", scene_shapes.len());
     let scene_bvh = BVH::build(&mut scene_shapes);
+    let scene_cam = Camera::from_axis_angle(
+        Vec3 { x: 4.0, y: 0.5, z: 0.0 },
+        Vec3 { x: 0.0, y: 1.0, z: 0.0 },
+        -std::f32::consts::PI / 180.0 * 90.0,
+        WIDTH as f32,
+        HEIGHT as f32
+    );
 
-    // let camera = Camera::from_axis_angle(Vec3 { x: 0.0, y: 0.0, z: 0.0 }, Vec3 { x: 1.0, y: 0.0, z: 0.0 }, 0.0, 1280.0, 720.0);
-    // let ray = camera.calc_ray(10.0, 30.0);
+    // test raytrace
+    for y in 0..scene_cam.viewport_h as u32 {
+        for x in 0..scene_cam.viewport_w as u32 {
+            let ray = scene_cam.calc_ray(x as f32, y as f32);
+            let hits = scene_bvh.traverse(&ray, &scene_shapes);
+            let mut dist = f32::MAX;
+            let mut isect: Option<Intersection> = None;
+            for hit in hits {
+                match hit.intersect(&ray) {
+                    Some(result) => {
+                        if result.t < dist {
+                            dist = result.t;
+                            isect = Some(result);
+                        }
+                    },
+                    None => (),
+                }
+            }
+            match isect {
+                Some(result) => {
+                    let mut mat_col = result.mat.diffuse;
 
-    // println!("{:?}", ray.1);
+                    // mutable color for final pixel
+                    let mut color = AMBIENT * mat_col;
+
+                    // check if in shadow
+                    let l_ray = Ray::new(result.pos + result.nrm * EPSILON, -LIGHT.normalize());
+                    let l_hits = scene_bvh.traverse(&l_ray, &scene_shapes);
+                    let mut l_dist = f32::MAX;
+                    let mut l_shadow = false;
+                    for l_hit in l_hits {
+                        match l_hit.intersect(&l_ray) {
+                            Some(l_result) => {
+                                if l_result.t < l_dist {
+                                    l_dist = l_result.t;
+                                    l_shadow = true;
+                                }
+                            },
+                            None => (),
+                        }
+                    }
+                    
+                    if !l_shadow {
+                        let n_dot_l = result.nrm.dot(-LIGHT.normalize());
+                        color += n_dot_l * mat_col;
+                    }
+
+                    color *= 255.0;
+
+                    let pix = image::Rgb([
+                        color.x.max(1.0) as u8,
+                        color.y.max(1.0) as u8,
+                        color.z.max(1.0) as u8
+                    ]);
+                    render_buf.put_pixel(x, y, pix);
+                },
+                None => {
+                    let r_dot_l = ray.direction.dot(-LIGHT.normalize());
+                    let color = (AMBIENT + (r_dot_l * AMBIENT)) * 255.0;
+                    let pix = image::Rgb([
+                        color.x.max(1.0) as u8,
+                        color.y.max(1.0) as u8,
+                        color.z.max(1.0) as u8
+                    ]);
+                    render_buf.put_pixel(x, y, pix);
+                },
+            }
+        }
+    }
+
+    // export render buffer
+    render_buf.save_with_format("./render.png", ImageFormat::Png).unwrap();
 }
