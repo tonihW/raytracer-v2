@@ -1,11 +1,16 @@
 use crate::intersection::Intersection;
+use crate::material::Material;
 use crate::utils::EPSILON;
 use crate::vertex::Vertex;
 use glam::{Vec3, Vec2};
+use bvh::aabb::{AABB, Bounded};
+use bvh::bounding_hierarchy::BHShape;
 use bvh::ray::Ray;
 
 pub struct Triangle {
     pub vrt: [Vertex; 3],
+    pub mat: Material,
+    pub node_idx: usize, // for BVH
 }
 
 impl Triangle {
@@ -79,5 +84,23 @@ impl Triangle {
         let t = u_cross_w.length() / denom;
 
         return (1.0 - r - t, r, t);
+    }
+}
+
+impl Bounded for Triangle {
+    fn aabb(&self) -> AABB {
+        let min = self.vrt[0].pos.min(self.vrt[1].pos.min(self.vrt[2].pos));
+        let max = self.vrt[0].pos.max(self.vrt[1].pos.max(self.vrt[2].pos));
+        return AABB::with_bounds(min, max);
+    }
+}
+
+impl BHShape for Triangle {
+    fn set_bh_node_index(&mut self, index: usize) {
+        self.node_idx = index;
+    }
+
+    fn bh_node_index(&self) -> usize {
+        self.node_idx
     }
 }
