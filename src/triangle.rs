@@ -9,6 +9,10 @@ pub struct Triangle {
 }
 
 impl Triangle {
+    /**
+     * Uses the Möller-Trumbore intersection algorithm
+     * Reference: http://www.graphics.cornell.edu/pubs/1997/MT97.html
+     */
     pub fn intersect(&self, ray: &Ray) -> Option<Intersection> {
         // calculate triangle edge vectors
         let edge_a = self.vrt[1].pos - self.vrt[0].pos;
@@ -50,13 +54,16 @@ impl Triangle {
         let (b0, b1, b2) = self.barycentric(&p, &edge_a, &edge_b);
 
         return Some(Intersection {
-            t: t,
-            pos: pos,
+            t,
+            pos,
             nrm: self.vrt[0].nrm + b1 * (self.vrt[1].nrm - self.vrt[0].nrm) + b2 * (self.vrt[2].nrm - self.vrt[0].nrm),
             tex: self.vrt[0].tex * b0 + self.vrt[1].tex * b1 + self.vrt[2].tex * b2,
         });
     }
 
+    /**
+     * Reference: https://www.pbr-book.org
+     */
     pub fn barycentric(&self, p: &Vec3, edge_a: &Vec3, edge_b: &Vec3) -> (f32, f32, f32) {
         // calculate line from target point to v0
         let w = *p - self.vrt[0].pos;
