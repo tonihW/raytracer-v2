@@ -9,6 +9,7 @@ use crate::{
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
 const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.8, -0.5, 0.1);
+const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.2, 0.2, 0.25);
 
 pub struct Raytracer;
 pub struct Pathtracer;
@@ -61,10 +62,19 @@ impl Raytracer {
                 // shade if not in shadow
                 if !l_shadow {
                     let n_dot_l = hit_result.nrm.dot(-RAYTRACER_LIGHT.normalize());
-                    result += n_dot_l * hit_result.mat.diffuse + hit_result.mat.emission;
+                    result += n_dot_l * hit_result.mat.diffuse;
                 }
+
+                // ambient light
+                result += RAYTRACER_AMBIENT * hit_result.mat.ambient;
+
+                // emissive light
+                result += hit_result.mat.emission;
             },
-            None => (),
+            None => {
+                let r_dot_l = ray.direction.dot(-RAYTRACER_LIGHT.normalize());
+                result += RAYTRACER_AMBIENT + r_dot_l * RAYTRACER_AMBIENT;
+            },
         }
         
         return result;

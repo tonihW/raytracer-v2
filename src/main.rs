@@ -19,8 +19,8 @@ use crate::{
     vertex::Vertex,
 };
 
-const WIDTH: u32 = 1280;
-const HEIGHT: u32 = 720;
+const WIDTH: u32 = 512;
+const HEIGHT: u32 = 512;
 
 fn load_model(file_name: &str, output: &mut Vec<Triangle>) {
     println!("loading models and materials...");
