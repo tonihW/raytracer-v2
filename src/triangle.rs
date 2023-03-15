@@ -67,7 +67,7 @@ impl Triangle {
             pos,
             nrm,
             tex,
-            mat: self.mat,
+            mat: &self.mat,
         });
     }
 

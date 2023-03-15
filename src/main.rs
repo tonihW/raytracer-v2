@@ -9,7 +9,9 @@ pub mod vertex;
 
 use bvh::{bvh::BVH};
 use glam::{Vec3, Vec2};
-use image::{ImageBuffer, RgbImage, ImageFormat};
+use image::{ImageBuffer, Rgb, RgbImage, ImageFormat};
+use image::io::Reader as ImageReader;
+use std::path::PathBuf;
 
 use crate::{
     camera::Camera,
@@ -73,6 +75,27 @@ fn load_model(file_name: &str, output: &mut Vec<Triangle>) {
         }
 
         for v in vertices.chunks_exact(3) {
+            let mut diffuse_texture: Option<RgbImage> = None;
+            if !mat.diffuse_texture.is_empty() {
+                // parse and construct file path
+                let base_path = PathBuf::from(file_name);
+                let base_path = base_path
+                    .parent()
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+                let mut file_path = String::from(base_path);
+                file_path.push('/');
+                file_path.push_str(&mat.diffuse_texture);
+
+                let texture = ImageReader::open(file_path)
+                    .unwrap()
+                    .decode()
+                    .unwrap()
+                    .to_rgb8();
+                diffuse_texture = Some(texture);
+            }
+
             output.push(Triangle {
                 vrt: [
                     v[0],
@@ -82,6 +105,7 @@ fn load_model(file_name: &str, output: &mut Vec<Triangle>) {
                 mat: Material {
                     ambient: Vec3::new(mat.ambient[0], mat.ambient[1], mat.ambient[2]),
                     diffuse: Vec3::new(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]),
+                    diffuse_texture: diffuse_texture,
                     specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
                     shininess: mat.shininess,
                     emission: Vec3::new(mat_emission[0], mat_emission[1], mat_emission[2]),

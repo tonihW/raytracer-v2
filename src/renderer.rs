@@ -62,7 +62,19 @@ impl Raytracer {
                 // shade if not in shadow
                 if !l_shadow {
                     let n_dot_l = hit_result.nrm.dot(-RAYTRACER_LIGHT.normalize());
-                    result += n_dot_l * hit_result.mat.diffuse;
+
+                    if hit_result.mat.diffuse_texture.is_none() {
+                        result += n_dot_l * hit_result.mat.diffuse;
+                    } else {
+                        let diffuse_texture = hit_result.mat.diffuse_texture.as_ref().unwrap();
+                        let diffuse_color = diffuse_texture
+                            .get_pixel(
+                                (hit_result.tex.x * diffuse_texture.width() as f32) as u32,
+                                (hit_result.tex.y * diffuse_texture.height() as f32) as u32
+                            );
+                        let diffuse_color = Vec3::new(diffuse_color[0] as f32 / 255.0, diffuse_color[1] as f32 / 255.0, diffuse_color[2] as f32 / 255.0);
+                        result += n_dot_l * diffuse_color;
+                    }
                 }
 
                 // ambient light
