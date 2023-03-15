@@ -1,1 +1,1 @@
-pub const EPSILON: f32 = 1e-6;
+pub const EPSILON: f32 = 1e-5;

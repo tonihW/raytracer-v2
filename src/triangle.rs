@@ -57,13 +57,16 @@ impl Triangle {
         let pos = ray.origin + ray.direction * t;
 
         // calculate barycentric coords for normals and texture coords
-        let (b0, b1, b2) = self.barycentric(&p, &edge_a, &edge_b);
+        let (b0, b1, b2) = self.barycentric(&pos, &edge_a, &edge_b);
+        let nrm = self.vrt[0].nrm + b1 * (self.vrt[1].nrm - self.vrt[0].nrm) + b2 * (self.vrt[2].nrm - self.vrt[0].nrm);
+        let nrm = nrm.normalize();
+        let tex = self.vrt[0].tex * b0 + self.vrt[1].tex * b1 + self.vrt[2].tex * b2;
 
         return Some(Intersection {
             t,
             pos,
-            nrm: self.vrt[0].nrm + b1 * (self.vrt[1].nrm - self.vrt[0].nrm) + b2 * (self.vrt[2].nrm - self.vrt[0].nrm),
-            tex: self.vrt[0].tex * b0 + self.vrt[1].tex * b1 + self.vrt[2].tex * b2,
+            nrm,
+            tex,
             mat: self.mat,
         });
     }

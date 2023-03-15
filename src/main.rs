@@ -19,25 +19,18 @@ use crate::{
     vertex::Vertex,
 };
 
-const WIDTH: u32 = 512;
-const HEIGHT: u32 = 512;
+const WIDTH: u32 = 1280;
+const HEIGHT: u32 = 720;
 
-fn main() {
-    // final render buffer
-    let mut render_buf: RgbImage = ImageBuffer::new(WIDTH, HEIGHT);
-
-    // scene shapes vector
-    let mut scene_shapes: Vec<Triangle> = Vec::new();
-
-    // load models and materials
+fn load_model(file_name: &str, output: &mut Vec<Triangle>) {
     println!("loading models and materials...");
     let tobj_load_opts = tobj::LoadOptions {
         triangulate: true,
-        ignore_lines: false,
-        ignore_points: false,
+        ignore_lines: true,
+        ignore_points: true,
         single_index: false,
     };
-    let (models, materials) = tobj::load_obj("./res/wirokit.obj", &tobj_load_opts)
+    let (models, materials) = tobj::load_obj(file_name, &tobj_load_opts)
         .expect("  failed to load target OBJ file");
     let materials = materials.expect("  failed to load target MTL file");
 
@@ -80,7 +73,7 @@ fn main() {
         }
 
         for v in vertices.chunks_exact(3) {
-            scene_shapes.push(Triangle {
+            output.push(Triangle {
                 vrt: [
                     v[0],
                     v[1],
@@ -97,6 +90,17 @@ fn main() {
             });
         }
     }
+}
+
+fn main() {
+    // final render buffer
+    let mut render_buf: RgbImage = ImageBuffer::new(WIDTH, HEIGHT);
+
+    // scene shapes vector
+    let mut scene_shapes: Vec<Triangle> = Vec::new();
+
+    // load models and materials
+    load_model("./res/wirokit.obj", &mut scene_shapes);
 
     // construct scene
     println!("constructing scene, shape_count: {} ...", scene_shapes.len());
