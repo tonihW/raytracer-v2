@@ -1,6 +1,7 @@
-use crate::transform::Transform;
 use bvh::ray::Ray;
 use glam::{Vec3, Quat};
+
+use crate::transform::Transform;
 
 #[derive(Debug)]
 pub struct Camera {

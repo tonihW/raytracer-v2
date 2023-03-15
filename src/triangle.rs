@@ -1,11 +1,12 @@
+use bvh::aabb::{AABB, Bounded};
+use bvh::bounding_hierarchy::BHShape;
+use bvh::ray::Ray;
+use glam::Vec3;
+
 use crate::intersection::Intersection;
 use crate::material::Material;
 use crate::utils::EPSILON;
 use crate::vertex::Vertex;
-use bvh::aabb::{AABB, Bounded};
-use bvh::bounding_hierarchy::BHShape;
-use bvh::ray::Ray;
-use glam::{Vec3, Vec2};
 
 pub struct Triangle {
     pub vrt: [Vertex; 3],

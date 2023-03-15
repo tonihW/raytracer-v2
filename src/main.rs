@@ -1,25 +1,26 @@
+pub mod camera;
 pub mod intersection;
 pub mod material;
-pub mod utils;
-pub mod vertex;
+pub mod renderer;
 pub mod triangle;
 pub mod transform;
-pub mod camera;
+pub mod utils;
+pub mod vertex;
 
-use bvh::{bvh::BVH, ray::Ray};
-use glam::{Vec3, Vec2, Quat};
+use bvh::{bvh::BVH};
+use glam::{Vec3, Vec2};
 use image::{ImageBuffer, RgbImage, ImageFormat};
-use intersection::Intersection;
-use triangle::Triangle;
-use transform::Transform;
-use camera::Camera;
 
-use crate::{vertex::Vertex, material::Material, utils::EPSILON};
+use crate::{
+    camera::Camera,
+    material::Material,
+    renderer::Raytracer,
+    triangle::Triangle,
+    vertex::Vertex,
+};
 
-const WIDTH: u32 = 1280;
-const HEIGHT: u32 = 720;
-const LIGHT: Vec3 = Vec3::new(0.5, -1.0, 0.4);
-const AMBIENT: Vec3 = Vec3::new(0.4, 0.4, 0.6);
+const WIDTH: u32 = 512;
+const HEIGHT: u32 = 512;
 
 fn main() {
     // final render buffer
@@ -108,73 +109,17 @@ fn main() {
         HEIGHT as f32
     );
 
-    // test raytrace
+    // render scene
     for y in 0..scene_cam.viewport_h as u32 {
         for x in 0..scene_cam.viewport_w as u32 {
             let ray = scene_cam.calc_ray(x as f32, y as f32);
-            let hits = scene_bvh.traverse(&ray, &scene_shapes);
-            let mut dist = f32::MAX;
-            let mut isect: Option<Intersection> = None;
-            for hit in hits {
-                match hit.intersect(&ray) {
-                    Some(result) => {
-                        if result.t < dist {
-                            dist = result.t;
-                            isect = Some(result);
-                        }
-                    },
-                    None => (),
-                }
-            }
-            match isect {
-                Some(result) => {
-                    let mut mat_col = result.mat.diffuse;
-
-                    // mutable color for final pixel
-                    let mut color = AMBIENT * mat_col;
-
-                    // check if in shadow
-                    let l_ray = Ray::new(result.pos + result.nrm * EPSILON, -LIGHT.normalize());
-                    let l_hits = scene_bvh.traverse(&l_ray, &scene_shapes);
-                    let mut l_dist = f32::MAX;
-                    let mut l_shadow = false;
-                    for l_hit in l_hits {
-                        match l_hit.intersect(&l_ray) {
-                            Some(l_result) => {
-                                if l_result.t < l_dist {
-                                    l_dist = l_result.t;
-                                    l_shadow = true;
-                                }
-                            },
-                            None => (),
-                        }
-                    }
-                    
-                    if !l_shadow {
-                        let n_dot_l = result.nrm.dot(-LIGHT.normalize());
-                        color += n_dot_l * mat_col;
-                    }
-
-                    color *= 255.0;
-
-                    let pix = image::Rgb([
-                        color.x.max(1.0) as u8,
-                        color.y.max(1.0) as u8,
-                        color.z.max(1.0) as u8
-                    ]);
-                    render_buf.put_pixel(x, y, pix);
-                },
-                None => {
-                    let r_dot_l = ray.direction.dot(-LIGHT.normalize());
-                    let color = (AMBIENT + (r_dot_l * AMBIENT)) * 255.0;
-                    let pix = image::Rgb([
-                        color.x.max(1.0) as u8,
-                        color.y.max(1.0) as u8,
-                        color.z.max(1.0) as u8
-                    ]);
-                    render_buf.put_pixel(x, y, pix);
-                },
-            }
+            let col = Raytracer::trace(&scene_bvh, &scene_shapes, &ray, 0) * 255.0;
+            let pix = image::Rgb([
+                col.x.max(1.0) as u8,
+                col.y.max(1.0) as u8,
+                col.z.max(1.0) as u8
+            ]);
+            render_buf.put_pixel(x, y, pix);
         }
     }
 
