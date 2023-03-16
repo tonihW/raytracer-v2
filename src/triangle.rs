@@ -4,13 +4,12 @@ use bvh::ray::Ray;
 use glam::Vec3;
 
 use crate::intersection::Intersection;
-use crate::material::Material;
 use crate::utils::EPSILON;
 use crate::vertex::Vertex;
 
 pub struct Triangle {
     pub vrt: [Vertex; 3],
-    pub mat: Material,
+    pub mat: String,
     pub node_idx: usize, // for BVH
 }
 

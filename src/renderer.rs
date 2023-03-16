@@ -1,15 +1,17 @@
 use bvh::{bvh::BVH, ray::Ray};
 use glam::Vec3;
+use std::collections::HashMap;
 
 use crate::{
     intersection::Intersection,
     triangle::Triangle,
     utils::EPSILON,
+    material::Material,
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
 const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.8, -0.5, 0.1);
-const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.2, 0.2, 0.25);
+const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.3, 0.3, 0.33);
 
 pub struct Raytracer;
 pub struct Pathtracer;
@@ -19,7 +21,7 @@ pub enum Renderer {
 }
 
 impl Raytracer {
-    pub fn trace(bvh: &BVH, shp: &Vec<Triangle>, ray: &Ray, n: u8) -> Vec3 {
+    pub fn trace(bvh: &BVH, shp: &Vec<Triangle>, mts: &HashMap<String, Material>, ray: &Ray, n: u8) -> Vec3 {
         // limit recursion
         if n > 4 {
             return RESULT_NULL;
@@ -45,6 +47,9 @@ impl Raytracer {
         let mut result = RESULT_NULL;
         match hit_isect {
             Some(hit_result) => {
+                // get reference to material
+                let hit_mat = mts.get(hit_result.mat).unwrap();
+                
                 // check if in shadow
                 let l_ray = Ray::new(hit_result.pos + hit_result.nrm * EPSILON, -RAYTRACER_LIGHT.normalize());
                 let l_hits = bvh.traverse(&l_ray, &shp);
@@ -59,29 +64,29 @@ impl Raytracer {
                     }
                 }
                 
+                // determine diffuse color
+                let mut d_color = hit_mat.diffuse;
+                if !hit_mat.diffuse_texture.is_none() {
+                    let d_texture = hit_mat.diffuse_texture.as_ref().unwrap();
+                    let d_texture_color = d_texture
+                        .get_pixel(
+                            (hit_result.tex.x * d_texture.width() as f32) as u32,
+                            (hit_result.tex.y * d_texture.height() as f32) as u32
+                        );
+                    d_color = Vec3::new(d_texture_color[0] as f32 / 255.0, d_texture_color[1] as f32 / 255.0, d_texture_color[2] as f32 / 255.0);
+                }
+                
                 // shade if not in shadow
                 if !l_shadow {
                     let n_dot_l = hit_result.nrm.dot(-RAYTRACER_LIGHT.normalize());
-
-                    if hit_result.mat.diffuse_texture.is_none() {
-                        result += n_dot_l * hit_result.mat.diffuse;
-                    } else {
-                        let diffuse_texture = hit_result.mat.diffuse_texture.as_ref().unwrap();
-                        let diffuse_color = diffuse_texture
-                            .get_pixel(
-                                (hit_result.tex.x * diffuse_texture.width() as f32) as u32,
-                                (hit_result.tex.y * diffuse_texture.height() as f32) as u32
-                            );
-                        let diffuse_color = Vec3::new(diffuse_color[0] as f32 / 255.0, diffuse_color[1] as f32 / 255.0, diffuse_color[2] as f32 / 255.0);
-                        result += n_dot_l * diffuse_color;
-                    }
+                    result += n_dot_l * d_color;
                 }
 
                 // ambient light
-                result += RAYTRACER_AMBIENT * hit_result.mat.ambient;
+                result += RAYTRACER_AMBIENT * hit_mat.ambient * d_color;
 
                 // emissive light
-                result += hit_result.mat.emission;
+                result += hit_mat.emission;
             },
             None => {
                 let r_dot_l = ray.direction.dot(-RAYTRACER_LIGHT.normalize());

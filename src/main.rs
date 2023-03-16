@@ -9,8 +9,9 @@ pub mod vertex;
 
 use bvh::{bvh::BVH};
 use glam::{Vec3, Vec2};
-use image::{ImageBuffer, Rgb, RgbImage, ImageFormat};
+use image::{ImageBuffer, RgbImage, ImageFormat};
 use image::io::Reader as ImageReader;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::{
@@ -21,10 +22,32 @@ use crate::{
     vertex::Vertex,
 };
 
-const WIDTH: u32 = 512;
-const HEIGHT: u32 = 512;
+const WIDTH: u32 = 1280;
+const HEIGHT: u32 = 720;
 
-fn load_model(file_name: &str, output: &mut Vec<Triangle>) {
+fn load_texture(model_file_name: &str, texture_name: &str) -> Option<RgbImage> {
+    if texture_name.is_empty() {
+        return None;
+    }
+
+    let base_path = PathBuf::from(model_file_name);
+    let base_path = base_path
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let mut file_name = String::from(base_path);
+    file_name.push('/');
+    file_name.push_str(texture_name);
+
+    return Some(ImageReader::open(file_name)
+        .unwrap()
+        .decode()
+        .unwrap()
+        .to_rgb8());
+}
+
+fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut HashMap<String, Material>) {
     println!("loading models and materials...");
     let tobj_load_opts = tobj::LoadOptions {
         triangulate: true,
@@ -73,43 +96,24 @@ fn load_model(file_name: &str, output: &mut Vec<Triangle>) {
                 tex,
             });
         }
+        
+        out_mats.entry(mat.name.clone()).or_insert(Material {
+            ambient: Vec3::new(mat.ambient[0], mat.ambient[1], mat.ambient[2]),
+            diffuse: Vec3::new(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]),
+            specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
+            shininess: mat.shininess,
+            emission: Vec3::new(mat_emission[0], mat_emission[1], mat_emission[2]),
+            diffuse_texture: load_texture(file_name, &mat.diffuse_texture),
+        });
 
         for v in vertices.chunks_exact(3) {
-            let mut diffuse_texture: Option<RgbImage> = None;
-            if !mat.diffuse_texture.is_empty() {
-                // parse and construct file path
-                let base_path = PathBuf::from(file_name);
-                let base_path = base_path
-                    .parent()
-                    .unwrap()
-                    .to_str()
-                    .unwrap();
-                let mut file_path = String::from(base_path);
-                file_path.push('/');
-                file_path.push_str(&mat.diffuse_texture);
-
-                let texture = ImageReader::open(file_path)
-                    .unwrap()
-                    .decode()
-                    .unwrap()
-                    .to_rgb8();
-                diffuse_texture = Some(texture);
-            }
-
-            output.push(Triangle {
+            out_tris.push(Triangle {
                 vrt: [
                     v[0],
                     v[1],
                     v[2],
                 ],
-                mat: Material {
-                    ambient: Vec3::new(mat.ambient[0], mat.ambient[1], mat.ambient[2]),
-                    diffuse: Vec3::new(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]),
-                    diffuse_texture: diffuse_texture,
-                    specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
-                    shininess: mat.shininess,
-                    emission: Vec3::new(mat_emission[0], mat_emission[1], mat_emission[2]),
-                },
+                mat: mat.name.clone(),
                 node_idx: 0,
             });
         }
@@ -123,8 +127,11 @@ fn main() {
     // scene shapes vector
     let mut scene_shapes: Vec<Triangle> = Vec::new();
 
+    // scene materials map
+    let mut scene_materials: HashMap<String, Material> = HashMap::new();
+
     // load models and materials
-    load_model("./res/wirokit.obj", &mut scene_shapes);
+    load_model("./res/wirokit.obj", &mut scene_shapes, &mut scene_materials);
 
     // construct scene
     println!("constructing scene, shape_count: {} ...", scene_shapes.len());
@@ -141,7 +148,7 @@ fn main() {
     for y in 0..scene_cam.viewport_h as u32 {
         for x in 0..scene_cam.viewport_w as u32 {
             let ray = scene_cam.calc_ray(x as f32, y as f32);
-            let col = Raytracer::trace(&scene_bvh, &scene_shapes, &ray, 0) * 255.0;
+            let col = Raytracer::trace(&scene_bvh, &scene_shapes, &scene_materials, &ray, 0) * 255.0;
             let pix = image::Rgb([
                 col.x.max(1.0) as u8,
                 col.y.max(1.0) as u8,
