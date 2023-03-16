@@ -22,8 +22,8 @@ use crate::{
     vertex::Vertex,
 };
 
-const WIDTH: u32 = 512;
-const HEIGHT: u32 = 512;
+const WIDTH: u32 = 1280;
+const HEIGHT: u32 = 720;
 
 fn load_normal_texture(model_file_name: &str, texture_name: &str) -> Option<RgbaImage> {
     if texture_name.is_empty() {
@@ -47,7 +47,7 @@ fn load_normal_texture(model_file_name: &str, texture_name: &str) -> Option<Rgba
         true => return Some(image.to_rgba8()),
         false => {
             let mut image_rgb = image.to_rgba8();
-            image_rgb.pixels_mut().for_each(|p| p[3] = 0);
+            image_rgb.pixels_mut().for_each(|p| p[3] = 255);
             return Some(image_rgb);
         },
     }
@@ -104,8 +104,8 @@ fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut Hash
         for (k, v) in &mat.unknown_param {
             println!("    unknown_param[{}] = {}", k, v);
         }
-        let mat_emission = &mat.unknown_param["Ke"];
-        let mat_emission = mat_emission
+        let mat_emission = mat.unknown_param.get("Ke")
+            .map_or("0 0 0", String::as_str)    
             .split(" ")
             .map(|s| s.parse::<f32>().unwrap())
             .collect::<Vec<_>>();
@@ -167,7 +167,7 @@ fn main() {
     let mut scene_materials: HashMap<String, Material> = HashMap::new();
 
     // load models and materials
-    //load_model("./res/crytek-sponza/sponza.obj", &mut scene_shapes, &mut scene_materials);
+    //load_model("./res/vokselia_spawn/vokselia_spawn.obj", &mut scene_shapes, &mut scene_materials);
     load_model("./res/wirokit.obj", &mut scene_shapes, &mut scene_materials);
 
     // construct scene

@@ -69,7 +69,7 @@ impl Raytracer {
                 
                 // determine diffuse color
                 let mut d_color = hit_mat.diffuse;
-                let mut d_alpha: u8 = 0;
+                let mut d_alpha: u8 = 255;
                 if !hit_mat.diffuse_texture.is_none() {
                     let d_texture = hit_mat.diffuse_texture.as_ref().unwrap();
                     let d_texture_color = d_texture
@@ -85,7 +85,7 @@ impl Raytracer {
                 }
 
                 // transparency via diffuse texture
-                if d_alpha == 255 {
+                if d_alpha == 0 {
                     let n_ray = Ray::new(hit_result.pos, ray.direction);
                     return result + Raytracer::trace(bvh, shp, mts, &n_ray, n + 1);
                 }
