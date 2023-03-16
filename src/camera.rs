@@ -48,7 +48,7 @@ impl Camera {
         let q = &self.trf.ori;
         let q_inv = q.conjugate();
         let w = Quat::from_xyzw(v_norm.x, v_norm.y, v_norm.z, 0.0);
-        let r = (*q * w * q_inv).normalize();
+        let r = *q * w * q_inv;
 
         return Ray::new(self.trf.pos, Vec3 {
             x: r.x,

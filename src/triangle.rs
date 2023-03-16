@@ -1,7 +1,7 @@
 use bvh::aabb::{AABB, Bounded};
 use bvh::bounding_hierarchy::BHShape;
 use bvh::ray::Ray;
-use glam::Vec3;
+use glam::{Vec3, Vec2};
 
 use crate::intersection::Intersection;
 use crate::utils::EPSILON;
@@ -65,7 +65,7 @@ impl Triangle {
             t,
             pos,
             nrm,
-            tex,
+            tex: Vec2::new(tex.x, 1.0 - tex.y),
             mat: &self.mat,
         });
     }

@@ -1,5 +1,5 @@
 use glam::Vec3;
-use image::{RgbImage};
+use image::{RgbaImage, GrayAlphaImage};
 
 #[derive(Debug, Clone)]
 pub struct Material {
@@ -8,5 +8,6 @@ pub struct Material {
     pub specular: Vec3,
     pub shininess: f32,
     pub emission: Vec3,
-    pub diffuse_texture: Option<RgbImage>,
+    pub diffuse_texture: Option<RgbaImage>,
+    pub alpha_texture: Option<GrayAlphaImage>,
 }

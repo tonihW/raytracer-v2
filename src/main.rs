@@ -9,7 +9,7 @@ pub mod vertex;
 
 use bvh::{bvh::BVH};
 use glam::{Vec3, Vec2};
-use image::{ImageBuffer, RgbImage, ImageFormat};
+use image::{ImageBuffer, RgbImage, RgbaImage, GrayAlphaImage, ImageFormat};
 use image::io::Reader as ImageReader;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,10 +22,10 @@ use crate::{
     vertex::Vertex,
 };
 
-const WIDTH: u32 = 1280;
-const HEIGHT: u32 = 720;
+const WIDTH: u32 = 512;
+const HEIGHT: u32 = 512;
 
-fn load_texture(model_file_name: &str, texture_name: &str) -> Option<RgbImage> {
+fn load_normal_texture(model_file_name: &str, texture_name: &str) -> Option<RgbaImage> {
     if texture_name.is_empty() {
         return None;
     }
@@ -39,12 +39,43 @@ fn load_texture(model_file_name: &str, texture_name: &str) -> Option<RgbImage> {
     let mut file_name = String::from(base_path);
     file_name.push('/');
     file_name.push_str(texture_name);
+    file_name = file_name.replace("\\", "/");
 
+    println!("{}", file_name);
+    let image = ImageReader::open(file_name).unwrap().decode().unwrap();
+    match image.color().has_alpha() {
+        true => return Some(image.to_rgba8()),
+        false => {
+            let mut image_rgb = image.to_rgba8();
+            image_rgb.pixels_mut().for_each(|p| p[3] = 0);
+            return Some(image_rgb);
+        },
+    }
+}
+
+fn load_alpha_texture(model_file_name: &str, texture_name: &str) -> Option<GrayAlphaImage> {
+    if texture_name.is_empty() {
+        return None;
+    }
+
+    let base_path = PathBuf::from(model_file_name);
+    let base_path = base_path
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let mut file_name = String::from(base_path);
+    file_name.push('/');
+    file_name.push_str(texture_name);
+    file_name = file_name.replace("\\", "/");
+
+    println!("{}", file_name);
     return Some(ImageReader::open(file_name)
         .unwrap()
         .decode()
         .unwrap()
-        .to_rgb8());
+        .to_luma_alpha8()
+    );
 }
 
 fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut HashMap<String, Material>) {
@@ -79,6 +110,20 @@ fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut Hash
             .map(|s| s.parse::<f32>().unwrap())
             .collect::<Vec<_>>();
         println!("  material.emission = {} {} {}", mat_emission[0], mat_emission[1], mat_emission[2]);
+        println!("  material.diffuse_texture = {}", &mat.diffuse_texture);
+        println!("  material.alpha_texture = {}", &mat.dissolve_texture);
+
+        if !out_mats.contains_key(&mat.name) {
+            out_mats.insert(mat.name.clone(), Material {
+                ambient: Vec3::new(mat.ambient[0], mat.ambient[1], mat.ambient[2]),
+                diffuse: Vec3::new(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]),
+                specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
+                shininess: mat.shininess,
+                emission: Vec3::new(mat_emission[0], mat_emission[1], mat_emission[2]),
+                diffuse_texture: load_normal_texture(file_name, &mat.diffuse_texture),
+                alpha_texture: load_alpha_texture(file_name, &mat.dissolve_texture),
+            });
+        }
 
         let mut vertices: Vec<Vertex> = Vec::new();
         for i in 0..m.mesh.indices.len() {
@@ -96,15 +141,6 @@ fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut Hash
                 tex,
             });
         }
-        
-        out_mats.entry(mat.name.clone()).or_insert(Material {
-            ambient: Vec3::new(mat.ambient[0], mat.ambient[1], mat.ambient[2]),
-            diffuse: Vec3::new(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]),
-            specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
-            shininess: mat.shininess,
-            emission: Vec3::new(mat_emission[0], mat_emission[1], mat_emission[2]),
-            diffuse_texture: load_texture(file_name, &mat.diffuse_texture),
-        });
 
         for v in vertices.chunks_exact(3) {
             out_tris.push(Triangle {
@@ -131,20 +167,22 @@ fn main() {
     let mut scene_materials: HashMap<String, Material> = HashMap::new();
 
     // load models and materials
+    //load_model("./res/crytek-sponza/sponza.obj", &mut scene_shapes, &mut scene_materials);
     load_model("./res/wirokit.obj", &mut scene_shapes, &mut scene_materials);
 
     // construct scene
     println!("constructing scene, shape_count: {} ...", scene_shapes.len());
     let scene_bvh = BVH::build(&mut scene_shapes);
     let scene_cam = Camera::from_axis_angle(
-        Vec3 { x: 4.0, y: 0.5, z: 0.0 },
+        Vec3 { x: 4.0, y: 0.5, z: -1.0 },
         Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-        -std::f32::consts::PI / 180.0 * 90.0,
+        -std::f32::consts::PI / 180.0 * 79.0,
         WIDTH as f32,
         HEIGHT as f32
     );
 
     // render scene
+    println!("rendering scene ...");
     for y in 0..scene_cam.viewport_h as u32 {
         for x in 0..scene_cam.viewport_w as u32 {
             let ray = scene_cam.calc_ray(x as f32, y as f32);
