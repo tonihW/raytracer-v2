@@ -22,27 +22,22 @@ use crate::{
     vertex::Vertex,
 };
 
-const WIDTH: u32 = 1280;
-const HEIGHT: u32 = 720;
+const WIDTH: u32 = 512;
+const HEIGHT: u32 = 512;
 
-fn load_normal_texture(model_file_name: &str, texture_name: &str) -> Option<RgbaImage> {
+fn load_rgba_texture(model_file_name: &str, texture_name: &str) -> Option<RgbaImage> {
     if texture_name.is_empty() {
         return None;
     }
 
-    let base_path = PathBuf::from(model_file_name);
-    let base_path = base_path
+    let file_path = PathBuf::from(model_file_name)
         .parent()
         .unwrap()
-        .to_str()
+        .join(texture_name);
+    let image = ImageReader::open(file_path)
+        .unwrap()
+        .decode()
         .unwrap();
-    let mut file_name = String::from(base_path);
-    file_name.push('/');
-    file_name.push_str(texture_name);
-    file_name = file_name.replace("\\", "/");
-
-    println!("{}", file_name);
-    let image = ImageReader::open(file_name).unwrap().decode().unwrap();
     match image.color().has_alpha() {
         true => return Some(image.to_rgba8()),
         false => {
@@ -58,19 +53,11 @@ fn load_alpha_texture(model_file_name: &str, texture_name: &str) -> Option<GrayA
         return None;
     }
 
-    let base_path = PathBuf::from(model_file_name);
-    let base_path = base_path
+    let file_path = PathBuf::from(model_file_name)
         .parent()
         .unwrap()
-        .to_str()
-        .unwrap();
-    let mut file_name = String::from(base_path);
-    file_name.push('/');
-    file_name.push_str(texture_name);
-    file_name = file_name.replace("\\", "/");
-
-    println!("{}", file_name);
-    return Some(ImageReader::open(file_name)
+        .join(texture_name);
+    return Some(ImageReader::open(file_path)
         .unwrap()
         .decode()
         .unwrap()
@@ -120,7 +107,7 @@ fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut Hash
                 specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
                 shininess: mat.shininess,
                 emission: Vec3::new(mat_emission[0], mat_emission[1], mat_emission[2]),
-                diffuse_texture: load_normal_texture(file_name, &mat.diffuse_texture),
+                diffuse_texture: load_rgba_texture(file_name, &mat.diffuse_texture),
                 alpha_texture: load_alpha_texture(file_name, &mat.dissolve_texture),
             });
         }
@@ -169,7 +156,7 @@ fn main() {
     // load models and materials
     //load_model("./res/vokselia_spawn/vokselia_spawn.obj", &mut scene_shapes, &mut scene_materials);
     load_model("./res/wirokit.obj", &mut scene_shapes, &mut scene_materials);
-
+    
     // construct scene
     println!("constructing scene, shape_count: {} ...", scene_shapes.len());
     let scene_bvh = BVH::build(&mut scene_shapes);
