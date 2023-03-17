@@ -1,6 +1,6 @@
 use glam::{Vec3, Quat};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Transform {
     pub pos: Vec3,
     pub ori: Quat,

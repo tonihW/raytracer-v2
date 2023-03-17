@@ -9,10 +9,11 @@ pub mod vertex;
 
 use bvh::{bvh::BVH};
 use glam::{Vec3, Vec2};
-use image::{ImageBuffer, RgbImage, RgbaImage, GrayAlphaImage, ImageFormat};
+use image::{ImageBuffer, RgbImage, RgbaImage, GrayAlphaImage, ImageFormat, Rgb};
 use image::io::Reader as ImageReader;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::thread::{self, ScopedJoinHandle};
 
 use crate::{
     camera::Camera,
@@ -34,6 +35,8 @@ fn load_rgba_texture(model_file_name: &str, texture_name: &str) -> Option<RgbaIm
         .parent()
         .unwrap()
         .join(texture_name);
+    let file_path = String::from(file_path.to_str().unwrap())
+        .replace('\\', "/");
     let image = ImageReader::open(file_path)
         .unwrap()
         .decode()
@@ -57,6 +60,8 @@ fn load_alpha_texture(model_file_name: &str, texture_name: &str) -> Option<GrayA
         .parent()
         .unwrap()
         .join(texture_name);
+    let file_path = String::from(file_path.to_str().unwrap())
+        .replace('\\', "/");
     return Some(ImageReader::open(file_path)
         .unwrap()
         .decode()
@@ -120,7 +125,7 @@ fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut Hash
 
             let pos = Vec3::new(m.mesh.positions[p_offset + 0], m.mesh.positions[p_offset + 1], m.mesh.positions[p_offset + 2]);
             let nrm = Vec3::new(m.mesh.normals[n_offset + 0], m.mesh.normals[n_offset + 1], m.mesh.normals[n_offset + 2]);
-            let tex = Vec2::new(m.mesh.texcoords[t_offset + 0], m.mesh.texcoords[t_offset + 1]);
+            let tex = Vec2::new(m.mesh.texcoords[t_offset + 0].rem_euclid(1.0), m.mesh.texcoords[t_offset + 1].rem_euclid(1.0)); // NOTE: texcoord % 1.0 to wrap around 0..1 bounds
 
             vertices.push(Vertex {
                 pos,
@@ -156,7 +161,9 @@ fn main() {
     // load models and materials
     //load_model("./res/vokselia_spawn/vokselia_spawn.obj", &mut scene_shapes, &mut scene_materials);
     load_model("./res/wirokit.obj", &mut scene_shapes, &mut scene_materials);
-    
+    //load_model("./res/crytek-sponza/sponza.obj", &mut scene_shapes, &mut scene_materials);
+    //load_model("./res/sponza/sponza.obj", &mut scene_shapes, &mut scene_materials);
+
     // construct scene
     println!("constructing scene, shape_count: {} ...", scene_shapes.len());
     let scene_bvh = BVH::build(&mut scene_shapes);
@@ -168,20 +175,59 @@ fn main() {
         HEIGHT as f32
     );
 
-    // render scene
-    println!("rendering scene ...");
-    for y in 0..scene_cam.viewport_h as u32 {
-        for x in 0..scene_cam.viewport_w as u32 {
-            let ray = scene_cam.calc_ray(x as f32, y as f32);
-            let col = Raytracer::trace(&scene_bvh, &scene_shapes, &scene_materials, &ray, 0) * 255.0;
-            let pix = image::Rgb([
-                col.x.max(1.0) as u8,
-                col.y.max(1.0) as u8,
-                col.z.max(1.0) as u8
-            ]);
-            render_buf.put_pixel(x, y, pix);
+    // determine multithreading params
+    let cpu_count = thread::available_parallelism()
+        .unwrap()
+        .get();
+    let task_w = scene_cam.viewport_w as usize / cpu_count;
+    let task_h = scene_cam.viewport_h as usize / cpu_count;
+    println!("cpu_count: {}, task_w: {}, task_h: {}", cpu_count, task_w, task_h);
+
+    thread::scope(|s| {
+        let bvh = &scene_bvh;
+        let shp = &scene_shapes;
+        let mat = &scene_materials;
+
+        // divide screen into rectangles as individual rendering tasks
+        let mut threads: Vec<ScopedJoinHandle<Vec<(u32, u32, Rgb<u8>)>>> = Vec::new();
+        for j in 0..cpu_count {
+            let y = j * task_h;
+            let h = y + task_h;
+
+            for i in 0..cpu_count {
+                let x = i * task_w;
+                let w = x + task_w;
+
+                threads.push(s.spawn(move || {
+                    let mut buf: Vec<(u32, u32, Rgb<u8>)> = Vec::new();
+
+                    for yy in y..h {
+                        for xx in x..w {
+                            let ray = &scene_cam.calc_ray(xx as f32, yy as f32);
+                            let col = Raytracer::trace(&bvh, &shp, &mat, &ray, 0) * 255.0;
+                            let pix = image::Rgb([
+                                col.x.max(1.0) as u8,
+                                col.y.max(1.0) as u8,
+                                col.z.max(1.0) as u8
+                            ]);
+                            buf.push((xx as u32, yy as u32, pix));
+                        }
+                    }
+
+                    return buf;
+                }));
+            }
         }
-    }
+
+        // wait for rendering tasks to complete
+        for handle in threads {
+            let buf = handle.join().unwrap();
+
+            for pix in buf {
+                render_buf.put_pixel(pix.0, pix.1, pix.2);
+            }
+        }
+    });
 
     // export render buffer
     render_buf.save_with_format("./render.png", ImageFormat::Png).unwrap();

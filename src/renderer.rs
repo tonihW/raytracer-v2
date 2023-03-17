@@ -24,8 +24,8 @@ pub enum Renderer {
 fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -> (f32, f32, f32, u8, u8) where P: Pixel<Subpixel = u8> + 'static {
     // get pixel sample at texture coordinate, wrap around width & height
     let p = img.get_pixel(
-        ((tex.x * img.width() as f32) as u32) % img.width(),
-        ((tex.y * img.height() as f32) as u32) % img.height(),
+        (tex.x * img.width() as f32) as u32 % img.width(),
+        (tex.y * img.height() as f32) as u32 % img.height(),
     );
 
     // return results based on pixel channel count

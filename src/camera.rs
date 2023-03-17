@@ -3,14 +3,12 @@ use glam::{Vec3, Quat};
 
 use crate::transform::Transform;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Camera {
     pub trf: Transform,
     pub viewport_w: f32,
     pub viewport_h: f32,
     pub viewport_a: f32,
-    pub film: Vec<f32>,
-    pub film_samples: i32,
 }
 
 impl Camera {
@@ -20,8 +18,6 @@ impl Camera {
             viewport_w,
             viewport_h,
             viewport_a: viewport_h / viewport_w,
-            film: vec![0.0; viewport_w as usize * viewport_h as usize],
-            film_samples: 0,
         }
     }
 
@@ -31,8 +27,6 @@ impl Camera {
             viewport_w,
             viewport_h,
             viewport_a: viewport_h / viewport_w,
-            film: vec![0.0; viewport_w as usize * viewport_h as usize],
-            film_samples: 0,
         }
     }
 
