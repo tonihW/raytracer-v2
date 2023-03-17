@@ -1,5 +1,6 @@
 use bvh::{bvh::BVH, ray::Ray};
-use glam::Vec3;
+use glam::{Vec3, Vec2};
+use image::{GenericImageView, Pixel};
 use std::collections::HashMap;
 
 use crate::{
@@ -18,6 +19,31 @@ pub struct Pathtracer;
 pub enum Renderer {
     RAYTRACER(Raytracer),
     PATHTRACER(Pathtracer),
+}
+
+fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -> (f32, f32, f32, u8, u8) where P: Pixel<Subpixel = u8> + 'static {
+    // get pixel sample at texture coordinate, wrap around width & height
+    let p = img.get_pixel(
+        ((tex.x * img.width() as f32) as u32) % img.width(),
+        ((tex.y * img.height() as f32) as u32) % img.height(),
+    );
+
+    // return results based on pixel channel count
+    match p.channels().len() {
+        2 => {
+            let p = p.to_luma_alpha();
+            return (0.0, 0.0, 0.0, p[0], p[1]);
+        },
+        3 => {
+            let p = p.to_rgb();
+            return (p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0, 255, 255);
+        },
+        4 => {
+            let p = p.to_rgba();
+            return (p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0, 255, p[3]);
+        },
+        _ => return (0.0, 0.0, 0.0, 255, 255)
+    }
 }
 
 impl Raytracer {
@@ -53,55 +79,65 @@ impl Raytracer {
                 // transparency via alpha texture
                 if !hit_mat.alpha_texture.is_none() {
                     let a_texture = hit_mat.alpha_texture.as_ref().unwrap();
-                    let a_texture_color = a_texture
-                        .get_pixel_checked(
-                            (hit_result.tex.x * a_texture.width() as f32) as u32,
-                            (hit_result.tex.y * a_texture.height() as f32) as u32
-                        );
-                    if !a_texture_color.is_none() {
-                        let c = a_texture_color.unwrap();
-                        if c[0] == 0 {
-                            let n_ray = Ray::new(hit_result.pos, ray.direction);
-                            return result + Raytracer::trace(bvh, shp, mts, &n_ray, n + 1);
-                        }
+                    let c = sample_texture(a_texture, &hit_result.tex);
+                    if c.3 == 0 {
+                        let n_ray = Ray::new(hit_result.pos, ray.direction);
+                        return result + Raytracer::trace(bvh, shp, mts, &n_ray, n + 1);
                     }
                 }
                 
-                // determine diffuse color
+                // transparency via diffuse texture
                 let mut d_color = hit_mat.diffuse;
-                let mut d_alpha: u8 = 255;
                 if !hit_mat.diffuse_texture.is_none() {
                     let d_texture = hit_mat.diffuse_texture.as_ref().unwrap();
-                    let d_texture_color = d_texture
-                        .get_pixel_checked(
-                            (hit_result.tex.x * d_texture.width() as f32) as u32,
-                            (hit_result.tex.y * d_texture.height() as f32) as u32
-                        );
-                    if !d_texture_color.is_none() {
-                        let c = d_texture_color.unwrap();
-                        d_color = Vec3::new(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0);
-                        d_alpha = c[3];
+                    let c = sample_texture(d_texture, &hit_result.tex);
+                    if c.4 == 0 {
+                        let n_ray = Ray::new(hit_result.pos, ray.direction);
+                        return result + Raytracer::trace(bvh, shp, mts, &n_ray, n + 1);
                     }
-                }
-
-                // transparency via diffuse texture
-                if d_alpha == 0 {
-                    let n_ray = Ray::new(hit_result.pos, ray.direction);
-                    return result + Raytracer::trace(bvh, shp, mts, &n_ray, n + 1);
+                    d_color = Vec3::new(c.0, c.1, c.2);
                 }
                 
                 // check if in shadow
                 let l_ray = Ray::new(hit_result.pos + hit_result.nrm * EPSILON, -RAYTRACER_LIGHT.normalize());
                 let l_hits = bvh.traverse(&l_ray, &shp);
-                let mut l_shadow = false;
+                let mut l_hit_dist = f32::MAX;
+                let mut l_hit_isect: Option<Intersection> = None;
                 for l_hit in l_hits {
                     match l_hit.intersect(&l_ray) {
-                        Some(_) => {
-                            l_shadow = true;
-                            break;
+                        Some(l_hit_result) => {
+                            if l_hit_result.t < l_hit_dist {
+                                l_hit_dist = l_hit_result.t;
+                                l_hit_isect = Some(l_hit_result);
+                            }
                         },
                         None => (),
                     }
+                }
+
+                let mut l_shadow = false;
+                match l_hit_isect {
+                    Some(l_hit_result) => {
+                        // get reference to material
+                        let l_hit_mat = mts.get(l_hit_result.mat).unwrap();
+
+                        if !l_hit_mat.alpha_texture.is_none() {
+                            // transparency via alpha texture
+                            let a_texture = l_hit_mat.alpha_texture.as_ref().unwrap();
+                            let c = sample_texture(a_texture, &l_hit_result.tex);
+                            if c.3 == 255 {
+                                l_shadow = true;
+                            }
+                        } else if !l_hit_mat.diffuse_texture.is_none() {
+                            // transparency via diffuse texture
+                            let d_texture = l_hit_mat.diffuse_texture.as_ref().unwrap();
+                            let c = sample_texture(d_texture, &l_hit_result.tex);
+                            if c.4 == 255 {
+                                l_shadow = true;
+                            }
+                        }
+                    },
+                    None => (),
                 }
                 
                 // shade if not in shadow
