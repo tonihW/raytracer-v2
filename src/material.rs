@@ -11,3 +11,17 @@ pub struct Material {
     pub diffuse_texture: Option<RgbaImage>,
     pub alpha_texture: Option<GrayAlphaImage>,
 }
+
+impl Material {
+    pub fn brdf_lambertian(&self, normal: &Vec3, light: &Vec3) -> f32 {
+        return normal.dot(*light);
+    }
+
+    pub fn brdf_phong(&self, reflect: &Vec3, view: &Vec3) -> f32 {
+        return reflect.dot(*view).powf(self.shininess);
+    }
+
+    pub fn fresnel_schlick(&self, normal: &Vec3, view: &Vec3) -> f32 {
+        return (1.0 - normal.dot(*view)).clamp(0.0, 1.0).powf(5.0);
+    }
+}

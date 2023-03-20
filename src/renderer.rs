@@ -6,12 +6,12 @@ use std::collections::HashMap;
 use crate::{
     intersection::Intersection,
     triangle::Triangle,
-    utils::EPSILON,
+    utils::{EPSILON, reflect},
     material::Material,
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
-const RAYTRACER_LIGHT: Vec3 = Vec3::new(0.3, -1.0, 0.3);
+const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.1, -1.0, 0.1);
 const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.3, 0.4, 0.4);
 
 pub struct Raytracer;
@@ -22,24 +22,25 @@ pub enum Renderer {
 }
 
 fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -> (f32, f32, f32, u8, u8) where P: Pixel<Subpixel = u8> + 'static {
-    // get pixel sample at texture coordinate, wrap around width & height
-    let p = img.get_pixel(
-        (tex.x * img.width() as f32) as u32 % img.width(),
-        (tex.y * img.height() as f32) as u32 % img.height(),
-    );
+    // get pixel sample at texture coordinate, clamp to max width & height
+    let pix_x = (tex.x * img.width() as f32) as u32;
+    let pix_y = (tex.y * img.height() as f32) as u32;
+    let max_w = img.width() - 1;
+    let max_h = img.height() - 1;
+    let pix_c = img.get_pixel(pix_x.clamp(0, max_w), pix_y.clamp(0, max_h));
 
     // return results based on pixel channel count
-    match p.channels().len() {
+    match pix_c.channels().len() {
         2 => {
-            let p = p.to_luma_alpha();
+            let p = pix_c.to_luma_alpha();
             return (0.0, 0.0, 0.0, p[0], p[1]);
         },
         3 => {
-            let p = p.to_rgb();
+            let p = pix_c.to_rgb();
             return (p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0, 255, 255);
         },
         4 => {
-            let p = p.to_rgba();
+            let p = pix_c.to_rgba();
             return (p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0, 255, p[3]);
         },
         _ => return (0.0, 0.0, 0.0, 255, 255)
@@ -141,11 +142,20 @@ impl Raytracer {
                     },
                     None => (),
                 }
+
+                // pre-calc stuff
+                let light = RAYTRACER_LIGHT.normalize();
+                let reflection = reflect(&light, &hit_result.nrm).normalize();
                 
-                // shade if not in shadow
+                // apply shading
                 if !l_shadow {
-                    let n_dot_l = hit_result.nrm.dot(-RAYTRACER_LIGHT.normalize());
-                    result += n_dot_l * d_color;
+                    // diffuse
+                    let brdf_d = hit_mat.brdf_lambertian(&hit_result.nrm, &-light);
+
+                    // specular
+                    let brdf_s = hit_mat.brdf_phong(&reflection, &-ray.direction);
+
+                    result += d_color * brdf_d + d_color * brdf_s;
                 }
 
                 // ambient light
