@@ -27,7 +27,7 @@ impl Triangle {
         let p = ray.direction.cross(edge_b);
         let d = edge_a.dot(p);
 
-        if d < EPSILON {
+        if d > -EPSILON && d < EPSILON {
             return None;
         }
 

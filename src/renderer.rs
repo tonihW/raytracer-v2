@@ -11,8 +11,8 @@ use crate::{
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
-const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.1, -1.0, 0.12);
-const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.5, 0.5, 0.55);
+const RAYTRACER_LIGHT: Vec3 = Vec3::new(0.3, -1.0, 0.3);
+const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.3, 0.4, 0.4);
 
 pub struct Raytracer;
 pub struct Pathtracer;
@@ -118,22 +118,24 @@ impl Raytracer {
                 let mut l_shadow = false;
                 match l_hit_isect {
                     Some(l_hit_result) => {
-                        // get reference to material
-                        let l_hit_mat = mts.get(l_hit_result.mat).unwrap();
+                        // in shadow by default
+                        l_shadow = true;
 
+                        // check for transparency
+                        let l_hit_mat = mts.get(l_hit_result.mat).unwrap();
                         if !l_hit_mat.alpha_texture.is_none() {
                             // transparency via alpha texture
                             let a_texture = l_hit_mat.alpha_texture.as_ref().unwrap();
                             let c = sample_texture(a_texture, &l_hit_result.tex);
-                            if c.3 == 255 {
-                                l_shadow = true;
+                            if c.3 == 0 {
+                                l_shadow = false;
                             }
                         } else if !l_hit_mat.diffuse_texture.is_none() {
                             // transparency via diffuse texture
                             let d_texture = l_hit_mat.diffuse_texture.as_ref().unwrap();
                             let c = sample_texture(d_texture, &l_hit_result.tex);
-                            if c.4 == 255 {
-                                l_shadow = true;
+                            if c.4 == 0 {
+                                l_shadow = false;
                             }
                         }
                     },
@@ -147,7 +149,7 @@ impl Raytracer {
                 }
 
                 // ambient light
-                result += RAYTRACER_AMBIENT * hit_mat.ambient * d_color;
+                result += RAYTRACER_AMBIENT * d_color;
 
                 // emissive light
                 result += hit_mat.emission;
