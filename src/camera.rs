@@ -30,6 +30,15 @@ impl Camera {
         }
     }
 
+    pub fn from_lookat(pos: Vec3, obj: Vec3, viewport_w: f32, viewport_h: f32) -> Camera {
+        Camera {
+            trf: Transform::from_lookat(pos, obj),
+            viewport_w,
+            viewport_h,
+            viewport_a: viewport_h / viewport_w,
+        }
+    }
+
     pub fn calc_ray(&self, x: f32, y: f32) -> Ray {
         // calculate ray direction vector
         let x_norm = (self.viewport_w * 0.5 - x) / self.viewport_w;

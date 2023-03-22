@@ -8,6 +8,7 @@ pub mod utils;
 pub mod vertex;
 
 use bvh::{bvh::BVH};
+use clap::{arg, Command};
 use glam::{Vec3, Vec2};
 use image::{ImageBuffer, RgbImage, RgbaImage, GrayAlphaImage, ImageFormat, Rgb};
 use image::io::Reader as ImageReader;
@@ -22,9 +23,6 @@ use crate::{
     triangle::Triangle,
     vertex::Vertex,
 };
-
-const WIDTH: u32 = 512;
-const HEIGHT: u32 = 512;
 
 fn load_rgba_texture(model_file_name: &str, texture_name: &str) -> Option<RgbaImage> {
     if texture_name.is_empty() {
@@ -149,8 +147,65 @@ fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut Hash
 }
 
 fn main() {
+    // parse args
+    let args = Command::new("pathtracer")
+        .version("0.1.0")
+        .author("tonihW")
+        .about("Simple 3D renderer based on raytracing")
+        .arg(
+            arg!(--width <WIDTH>)
+                .required(false)
+                .default_value("512")
+                .value_parser(clap::value_parser!(u32))
+        )
+        .arg(
+            arg!(--height <HEIGHT>)
+                .required(false)
+                .default_value("512")
+                .value_parser(clap::value_parser!(u32))
+        )
+        .arg(
+            arg!(--model <MODEL>)
+                .required(false)
+                .default_value("./res/wirokit.obj")
+                .value_parser(clap::value_parser!(String))
+        )
+        .arg(
+            arg!(--cam_pos <CAM_POS>)
+                .required(false)
+                .default_value("0.0 0.0 0.0")
+                .value_parser(clap::value_parser!(String))
+        )
+        .arg(
+            arg!(--cam_axis <CAM_AXIS>)
+                .required(false)
+                .default_value("0.0 1.0 0.0")
+                .value_parser(clap::value_parser!(String))
+        )
+        .arg(
+            arg!(--cam_angle <CAM_ANGLE>)
+                .required(false)
+                .default_value("0.0")
+                .value_parser(clap::value_parser!(f32))
+        )
+        .get_matches();
+    let arg_width = args.get_one::<u32>("width").unwrap();
+    let arg_height = args.get_one::<u32>("height").unwrap();
+    let arg_model = args.get_one::<String>("model").unwrap();
+    let arg_cam_pos = args.get_one::<String>("cam_pos")
+        .map_or("0.0 0.0 0.0", String::as_str)
+        .split(" ")
+        .map(|s| s.parse::<f32>().unwrap())
+        .collect::<Vec<_>>();
+    let arg_cam_axis = args.get_one::<String>("cam_axis")
+        .map_or("0.0 0.0 0.0", String::as_str)
+        .split(" ")
+        .map(|s| s.parse::<f32>().unwrap())
+        .collect::<Vec<_>>();
+    let arg_cam_angle = args.get_one::<f32>("cam_angle").unwrap();
+
     // final render buffer
-    let mut render_buf: RgbImage = ImageBuffer::new(WIDTH, HEIGHT);
+    let mut render_buf: RgbImage = ImageBuffer::new(*arg_width, *arg_height);
 
     // scene shapes vector
     let mut scene_shapes: Vec<Triangle> = Vec::new();
@@ -159,20 +214,17 @@ fn main() {
     let mut scene_materials: HashMap<String, Material> = HashMap::new();
 
     // load models and materials
-    //load_model("./res/vokselia_spawn/vokselia_spawn.obj", &mut scene_shapes, &mut scene_materials);
-    load_model("./res/wirokit.obj", &mut scene_shapes, &mut scene_materials);
-    //load_model("./res/crytek-sponza/sponza.obj", &mut scene_shapes, &mut scene_materials);
-    //load_model("./res/sponza/sponza.obj", &mut scene_shapes, &mut scene_materials);
+    load_model(arg_model, &mut scene_shapes, &mut scene_materials);
 
     // construct scene
     println!("constructing scene, shape_count: {} ...", scene_shapes.len());
     let scene_bvh = BVH::build(&mut scene_shapes);
     let scene_cam = Camera::from_axis_angle(
-        Vec3 { x: 4.0, y: 0.5, z: -1.0 },
-        Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-        -std::f32::consts::PI / 180.0 * 79.0,
-        WIDTH as f32,
-        HEIGHT as f32
+        Vec3 { x: arg_cam_pos[0], y: arg_cam_pos[1], z: arg_cam_pos[2] },
+        Vec3 { x: arg_cam_axis[0], y: arg_cam_axis[1], z: arg_cam_axis[2] },
+        std::f32::consts::PI / 180.0 * *arg_cam_angle,
+        *arg_width as f32,
+        *arg_height as f32
     );
 
     // determine multithreading params
