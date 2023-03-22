@@ -1,13 +1,11 @@
-use bvh::{bvh::BVH, ray::Ray};
+use bvh::{ray::Ray};
 use glam::{Vec3, Vec2};
 use image::{GenericImageView, Pixel};
-use std::collections::HashMap;
 
 use crate::{
     intersection::Intersection,
-    triangle::Triangle,
     utils::{EPSILON, reflect},
-    material::Material,
+    scene::Scene,
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
@@ -48,14 +46,17 @@ fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -
 }
 
 impl Raytracer {
-    pub fn trace(bvh: &BVH, shp: &Vec<Triangle>, mts: &HashMap<String, Material>, ray: &Ray, n: u8) -> Vec3 {
+    pub fn trace(scene: &Scene, ray: &Ray, n: u8) -> Vec3 {
         // limit recursion
         if n > 4 {
             return RESULT_NULL;
         }
 
+        // get ref to BVH
+        let bvh = scene.bvh.as_ref().unwrap();
+
         // find closest intersection
-        let hits = bvh.traverse(&ray, &shp);
+        let hits = bvh.traverse(&ray, &scene.shapes);
         let mut hit_dist = f32::MAX;
         let mut hit_isect: Option<Intersection> = None;
         for hit in hits {
@@ -75,7 +76,7 @@ impl Raytracer {
         match hit_isect {
             Some(hit_result) => {
                 // get reference to material
-                let hit_mat = mts.get(hit_result.mat).unwrap();
+                let hit_mat = scene.materials.get(hit_result.mat).unwrap();
 
                 // transparency via alpha texture
                 if !hit_mat.alpha_texture.is_none() {
@@ -83,7 +84,7 @@ impl Raytracer {
                     let c = sample_texture(a_texture, &hit_result.tex);
                     if c.3 == 0 {
                         let n_ray = Ray::new(hit_result.pos, ray.direction);
-                        return result + Raytracer::trace(bvh, shp, mts, &n_ray, n + 1);
+                        return result + Raytracer::trace(scene, &n_ray, n + 1);
                     }
                 }
                 
@@ -94,14 +95,14 @@ impl Raytracer {
                     let c = sample_texture(d_texture, &hit_result.tex);
                     if c.4 == 0 {
                         let n_ray = Ray::new(hit_result.pos, ray.direction);
-                        return result + Raytracer::trace(bvh, shp, mts, &n_ray, n + 1);
+                        return result + Raytracer::trace(scene, &n_ray, n + 1);
                     }
                     d_color = Vec3::new(c.0, c.1, c.2);
                 }
                 
                 // check if in shadow
                 let l_ray = Ray::new(hit_result.pos + hit_result.nrm * EPSILON, -RAYTRACER_LIGHT.normalize());
-                let l_hits = bvh.traverse(&l_ray, &shp);
+                let l_hits = bvh.traverse(&l_ray, &scene.shapes);
                 let mut l_hit_dist = f32::MAX;
                 let mut l_hit_isect: Option<Intersection> = None;
                 for l_hit in l_hits {
@@ -123,7 +124,7 @@ impl Raytracer {
                         l_shadow = true;
 
                         // check for transparency
-                        let l_hit_mat = mts.get(l_hit_result.mat).unwrap();
+                        let l_hit_mat = scene.materials.get(l_hit_result.mat).unwrap();
                         if !l_hit_mat.alpha_texture.is_none() {
                             // transparency via alpha texture
                             let a_texture = l_hit_mat.alpha_texture.as_ref().unwrap();

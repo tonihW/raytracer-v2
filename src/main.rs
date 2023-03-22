@@ -2,6 +2,7 @@ pub mod camera;
 pub mod intersection;
 pub mod material;
 pub mod renderer;
+pub mod scene;
 pub mod triangle;
 pub mod transform;
 pub mod utils;
@@ -12,10 +13,10 @@ use clap::{arg, Command};
 use glam::{Vec3, Vec2};
 use image::{ImageBuffer, RgbImage, RgbaImage, GrayAlphaImage, ImageFormat, Rgb};
 use image::io::Reader as ImageReader;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::thread::{self, ScopedJoinHandle};
 
+use crate::scene::Scene;
 use crate::{
     camera::Camera,
     material::Material,
@@ -68,7 +69,7 @@ fn load_alpha_texture(model_file_name: &str, texture_name: &str) -> Option<GrayA
     );
 }
 
-fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut HashMap<String, Material>) {
+fn load_model(file_name: &str, scene: &mut Scene) {
     println!("loading models and materials...");
     let tobj_load_opts = tobj::LoadOptions {
         triangulate: true,
@@ -103,8 +104,8 @@ fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut Hash
         println!("  material.diffuse_texture = {}", &mat.diffuse_texture);
         println!("  material.alpha_texture = {}", &mat.dissolve_texture);
 
-        if !out_mats.contains_key(&mat.name) {
-            out_mats.insert(mat.name.clone(), Material {
+        if !scene.materials.contains_key(&mat.name) {
+            scene.materials.insert(mat.name.clone(), Material {
                 ambient: Vec3::new(mat.ambient[0], mat.ambient[1], mat.ambient[2]),
                 diffuse: Vec3::new(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]),
                 specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
@@ -133,7 +134,7 @@ fn load_model(file_name: &str, out_tris: &mut Vec<Triangle>, out_mats: &mut Hash
         }
 
         for v in vertices.chunks_exact(3) {
-            out_tris.push(Triangle {
+            scene.shapes.push(Triangle {
                 vrt: [
                     v[0],
                     v[1],
@@ -207,38 +208,33 @@ fn main() {
     // final render buffer
     let mut render_buf: RgbImage = ImageBuffer::new(*arg_width, *arg_height);
 
-    // scene shapes vector
-    let mut scene_shapes: Vec<Triangle> = Vec::new();
-
-    // scene materials map
-    let mut scene_materials: HashMap<String, Material> = HashMap::new();
-
-    // load models and materials
-    load_model(arg_model, &mut scene_shapes, &mut scene_materials);
-
-    // construct scene
-    println!("constructing scene, shape_count: {} ...", scene_shapes.len());
-    let scene_bvh = BVH::build(&mut scene_shapes);
-    let scene_cam = Camera::from_axis_angle(
+    // init scene
+    let mut scene = Scene::new(Camera::from_axis_angle(
         Vec3 { x: arg_cam_pos[0], y: arg_cam_pos[1], z: arg_cam_pos[2] },
         Vec3 { x: arg_cam_axis[0], y: arg_cam_axis[1], z: arg_cam_axis[2] },
         std::f32::consts::PI / 180.0 * *arg_cam_angle,
         *arg_width as f32,
         *arg_height as f32
-    );
+    ));
+
+    // load models and materials
+    load_model(arg_model, &mut scene);
+
+    // construct scene
+    println!("constructing scene, shape_count: {} ...", scene.shapes.len());
+    scene.bvh = Some(BVH::build(&mut scene.shapes));
 
     // determine multithreading params
     let cpu_count = thread::available_parallelism()
         .unwrap()
         .get();
-    let task_w = scene_cam.viewport_w as usize / cpu_count;
-    let task_h = scene_cam.viewport_h as usize / cpu_count;
+    let task_w = scene.camera.viewport_w as usize / cpu_count;
+    let task_h = scene.camera.viewport_h as usize / cpu_count;
     println!("cpu_count: {}, task_w: {}, task_h: {}", cpu_count, task_w, task_h);
 
+    // execute rendering as split tasks across multiple threads
     thread::scope(|s| {
-        let bvh = &scene_bvh;
-        let shp = &scene_shapes;
-        let mat = &scene_materials;
+        let scn = &scene;
 
         // divide screen into rectangles as individual rendering tasks
         let mut threads: Vec<ScopedJoinHandle<Vec<(u32, u32, Rgb<u8>)>>> = Vec::new();
@@ -255,8 +251,8 @@ fn main() {
 
                     for yy in y..h {
                         for xx in x..w {
-                            let ray = &scene_cam.calc_ray(xx as f32, yy as f32);
-                            let col = Raytracer::trace(&bvh, &shp, &mat, &ray, 0) * 255.0;
+                            let ray = &scn.camera.calc_ray(xx as f32, yy as f32);
+                            let col = Raytracer::trace(scn, &ray, 0) * 255.0;
                             let pix = image::Rgb([
                                 col.x.max(1.0) as u8,
                                 col.y.max(1.0) as u8,
