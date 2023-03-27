@@ -21,11 +21,11 @@ pub enum Renderer {
 
 fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -> (f32, f32, f32, u8, u8) where P: Pixel<Subpixel = u8> {
     // get pixel sample at texture coordinate, clamp to max width & height
-    let pix_x = (tex.x * img.width() as f32) as u32;
-    let pix_y = (tex.y * img.height() as f32) as u32;
-    let max_w = img.width() - 1;
-    let max_h = img.height() - 1;
-    let pix_c = img.get_pixel(pix_x.clamp(0, max_w), pix_y.clamp(0, max_h));
+    let img_w = img.width() - 1;
+    let img_h = img.height() - 1;
+    let pix_x = (tex.x * img_w as f32) as u32;
+    let pix_y = (tex.y * img_h as f32) as u32;
+    let pix_c = img.get_pixel(pix_x.clamp(0, img_w), pix_y.clamp(0, img_h));
 
     // return results based on pixel channel count
     match pix_c.channels().len() {
