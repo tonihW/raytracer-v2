@@ -19,7 +19,7 @@ pub enum Renderer {
     PATHTRACER(Pathtracer),
 }
 
-fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -> (f32, f32, f32, u8, u8) where P: Pixel<Subpixel = u8> + 'static {
+fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -> (f32, f32, f32, u8, u8) where P: Pixel<Subpixel = u8> {
     // get pixel sample at texture coordinate, clamp to max width & height
     let pix_x = (tex.x * img.width() as f32) as u32;
     let pix_y = (tex.y * img.height() as f32) as u32;
