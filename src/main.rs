@@ -8,6 +8,7 @@ pub mod transform;
 pub mod utils;
 pub mod vertex;
 
+use bvh::aabb::Bounded;
 use bvh::{bvh::BVH};
 use clap::{arg, Command};
 use glam::{Vec3, Vec2};
@@ -81,7 +82,7 @@ fn load_model(file_name: &str, scene: &mut Scene) {
     };
     let (models, materials) = tobj::load_obj(file_name, &tobj_load_opts)
         .expect("  failed to load target OBJ file");
-    let materials = materials.expect("  failed to load target MTL file");
+    let mut materials = materials.expect("  failed to load target MTL file");
 
     for m in &models {
         println!("  model.name = \"{}\"", m.name);
@@ -91,7 +92,19 @@ fn load_model(file_name: &str, scene: &mut Scene) {
         println!("  model.texcoord_indice_count = {}", m.mesh.texcoord_indices.len());
         println!("  model.face_count = {}", m.mesh.indices.len() / 3);
 
-        let mat = &materials[m.mesh.material_id.unwrap()];
+        let mat = match m.mesh.material_id {
+            Some(material_id) => &materials[material_id],
+            None => {
+                if !materials.is_empty() {
+                    &materials[0]
+                } else {
+                    materials.push(tobj::Material::default());
+
+                    &materials[0]
+                }
+            }
+        };
+
         println!("  material.name = {}", mat.name);
         println!("  material.unknown_param_count = {}", mat.unknown_param.len());
         for (k, v) in &mat.unknown_param {
@@ -136,7 +149,7 @@ fn load_model(file_name: &str, scene: &mut Scene) {
         }
 
         for v in vertices.chunks_exact(3) {
-            scene.shapes.push(Triangle {
+            let t = Triangle {
                 vrt: [
                     v[0],
                     v[1],
@@ -144,7 +157,12 @@ fn load_model(file_name: &str, scene: &mut Scene) {
                 ],
                 mat: mat.name.clone(),
                 node_idx: 0,
-            });
+            };
+
+            // validate triangle, discard invalid triangles
+            if Bounded::aabb(&t).surface_area() > 0.0 {
+                scene.shapes.push(t);
+            }
         }
     }
 }
