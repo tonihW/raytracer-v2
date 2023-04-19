@@ -1,5 +1,5 @@
 use bvh::{ray::Ray};
-use glam::{Vec3, Vec2};
+use glam::{Vec3, Vec2, Vec4};
 use image::{GenericImageView, Pixel};
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
-const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.2, -1.0, 0.2);
+const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.1, -1.0, 0.1);
 const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.3, 0.4, 0.4);
 
 pub struct Raytracer;
@@ -19,27 +19,64 @@ pub enum Renderer {
     PATHTRACER(Pathtracer),
 }
 
+/**
+ * Reference: https://graphics.cg.uni-saarland.de/courses/cg1-2017/slides/CG09-TextureFiltering.pdf
+ */
 fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -> (f32, f32, f32, u8, u8) where P: Pixel<Subpixel = u8> {
-    // get pixel sample at texture coordinate, use wrapping  sampling mode
-    let img_w = img.width() - 1;
-    let img_h = img.height() - 1;
-    let pix_x = (tex.x.rem_euclid(1.0) * img_w as f32) as u32;
-    let pix_y = (tex.y.rem_euclid(1.0) * img_h as f32) as u32;
-    let pix_c = img.get_pixel(pix_x, pix_y);
+    // calculate texture dimensions
+    let tex_w = (img.width() - 1) as f32;
+    let tex_h = (img.height() - 1) as f32;
+
+    // calculate texture coordinate
+    let t = Vec2::new(tex.x.rem_euclid(1.0) * tex_w, tex.y.rem_euclid(1.0) * tex_h);
+
+    // sample pixels, offset by 0.5 to "center" pixels
+    // NOTE: first vec is in clockwise-order, actual vec is in the order the ref PDF calculations require
+    //let p = [(t.x + 1.5, t.y + 1.5), (t.x + 1.5, t.y - 0.5), (t.x - 0.5, t.y - 0.5), (t.x - 0.5, t.y + 1.5)]
+    let p = [(t.x - 0.5, t.y - 0.5), (t.x + 1.5, t.y - 0.5), (t.x - 0.5, t.y + 1.5), (t.x + 1.5, t.y + 1.5)]
+        .map(|x| {
+            // snap the sampling coordinate to pixel-grid
+            let snap_x = x.0 as u32;
+            let snap_y = x.1 as u32;
+
+            return (snap_x as f32 + 0.5, snap_y as f32 + 0.5, img.get_pixel(snap_x.clamp(0, tex_w as u32), snap_y.clamp(0, tex_h as u32)));
+        });
+    
+    // calculate s and t as in ref PDF
+    let dist_s = t.x - p[0].0;
+    let dist_t = t.y - p[0].1;
 
     // return results based on pixel channel count
-    match pix_c.channels().len() {
+    match p[0].2.channels().len() {
         2 => {
-            let p = pix_c.to_luma_alpha();
+            let p = p[0].2.to_luma_alpha();
             return (0.0, 0.0, 0.0, p[0], p[1]);
         },
         3 => {
-            let p = pix_c.to_rgb();
-            return (p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0, 255, 255);
+            let p = p
+                .map(|x| {
+                    let pix = x.2.to_rgb();
+                    return Vec3::new(pix[0] as f32 / 255.0, pix[1] as f32 / 255.0, pix[2] as f32 / 255.0);
+                });
+            let c = (1.0 - dist_t) * (1.0 - dist_s) * p[0]
+                + (1.0 - dist_t) * dist_s * p[1]
+                + dist_t * (1.0 - dist_s) * p[2]
+                + dist_t * dist_s * p[3];
+            
+            return (c[0], c[1], c[2], 255, 255);
         },
         4 => {
-            let p = pix_c.to_rgba();
-            return (p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0, 255, p[3]);
+            let p = p
+                .map(|x| {
+                    let pix = x.2.to_rgba();
+                    return Vec4::new(pix[0] as f32 / 255.0, pix[1] as f32 / 255.0, pix[2] as f32 / 255.0, pix[3] as f32);
+                });
+            let c = (1.0 - dist_t) * (1.0 - dist_s) * p[0]
+                + (1.0 - dist_t) * dist_s * p[1]
+                + dist_t * (1.0 - dist_s) * p[2]
+                + dist_t * dist_s * p[3];
+            
+            return (c[0], c[1], c[2], 255, p[0].w as u8);
         },
         _ => return (0.0, 0.0, 0.0, 255, 255)
     }
