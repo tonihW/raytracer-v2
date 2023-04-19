@@ -9,7 +9,7 @@ use crate::{
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
-const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.1, -1.0, 0.1);
+const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.2, -1.0, 0.2);
 const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.3, 0.4, 0.4);
 
 pub struct Raytracer;
@@ -48,7 +48,7 @@ fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -
 impl Raytracer {
     pub fn trace(scene: &Scene, ray: &Ray, n: u8) -> Vec3 {
         // limit recursion
-        if n > 4 {
+        if n > 15 {
             return RESULT_NULL;
         }
 
