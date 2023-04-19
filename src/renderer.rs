@@ -9,7 +9,7 @@ use crate::{
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
-const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.1, -1.0, 0.1);
+const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.2, -1.0, 0.2);
 const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.3, 0.4, 0.4);
 
 pub struct Raytracer;
@@ -20,12 +20,12 @@ pub enum Renderer {
 }
 
 fn sample_texture<P: Pixel>(img: &dyn GenericImageView<Pixel = P>, tex: &Vec2) -> (f32, f32, f32, u8, u8) where P: Pixel<Subpixel = u8> {
-    // get pixel sample at texture coordinate, clamp to max width & height
+    // get pixel sample at texture coordinate, use wrapping  sampling mode
     let img_w = img.width() - 1;
     let img_h = img.height() - 1;
-    let pix_x = (tex.x * img_w as f32) as u32;
-    let pix_y = (tex.y * img_h as f32) as u32;
-    let pix_c = img.get_pixel(pix_x.clamp(0, img_w), pix_y.clamp(0, img_h));
+    let pix_x = (tex.x.rem_euclid(1.0) * img_w as f32) as u32;
+    let pix_y = (tex.y.rem_euclid(1.0) * img_h as f32) as u32;
+    let pix_c = img.get_pixel(pix_x, pix_y);
 
     // return results based on pixel channel count
     match pix_c.channels().len() {

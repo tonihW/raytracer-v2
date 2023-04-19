@@ -95,7 +95,10 @@ impl Bounded for Triangle {
     fn aabb(&self) -> AABB {
         let min = self.vrt[0].pos.min(self.vrt[1].pos.min(self.vrt[2].pos));
         let max = self.vrt[0].pos.max(self.vrt[1].pos.max(self.vrt[2].pos));
-        return AABB::with_bounds(min, max);
+        let aabb = AABB::with_bounds(min, max);
+        assert!(!aabb.is_empty());
+
+        return aabb;
     }
 }
 

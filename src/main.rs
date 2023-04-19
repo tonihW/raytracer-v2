@@ -126,7 +126,7 @@ fn load_model(file_name: &str, scene: &mut Scene) {
 
             let pos = Vec3::new(m.mesh.positions[p_offset + 0], m.mesh.positions[p_offset + 1], m.mesh.positions[p_offset + 2]);
             let nrm = Vec3::new(m.mesh.normals[n_offset + 0], m.mesh.normals[n_offset + 1], m.mesh.normals[n_offset + 2]);
-            let tex = Vec2::new(m.mesh.texcoords[t_offset + 0].rem_euclid(1.0), m.mesh.texcoords[t_offset + 1].rem_euclid(1.0)); // NOTE: texcoord % 1.0 to wrap around 0..1 bounds
+            let tex = Vec2::new(m.mesh.texcoords[t_offset + 0], m.mesh.texcoords[t_offset + 1]);
 
             vertices.push(Vertex {
                 pos,
