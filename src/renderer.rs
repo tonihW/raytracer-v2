@@ -5,7 +5,7 @@ use image::{GenericImageView, Pixel};
 use crate::{
     intersection::Intersection,
     utils::{EPSILON, reflect},
-    scene::Scene,
+    scene::Scene, material::Texture,
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
@@ -79,9 +79,8 @@ impl Raytracer {
                 let hit_mat = scene.materials.get(hit_result.mat).unwrap();
 
                 // transparency via alpha texture
-                if !hit_mat.alpha_texture.is_none() {
-                    let a_texture = hit_mat.alpha_texture.as_ref().unwrap();
-                    let c = sample_texture(a_texture, &hit_result.tex);
+                if let Texture::Alpha(ref alpha_texture) = hit_mat.alpha_texture {
+                    let c = sample_texture(alpha_texture, &hit_result.tex);
                     if c.3 == 0 {
                         let n_ray = Ray::new(hit_result.pos, ray.direction);
                         return result + Raytracer::trace(scene, &n_ray, n + 1);
@@ -90,9 +89,8 @@ impl Raytracer {
                 
                 // transparency via diffuse texture
                 let mut d_color = hit_mat.diffuse;
-                if !hit_mat.diffuse_texture.is_none() {
-                    let d_texture = hit_mat.diffuse_texture.as_ref().unwrap();
-                    let c = sample_texture(d_texture, &hit_result.tex);
+                if let Texture::Diffuse(ref diffuse_texture) = hit_mat.diffuse_texture {
+                    let c = sample_texture(diffuse_texture, &hit_result.tex);
                     if c.4 == 0 {
                         let n_ray = Ray::new(hit_result.pos, ray.direction);
                         return result + Raytracer::trace(scene, &n_ray, n + 1);
@@ -125,17 +123,15 @@ impl Raytracer {
 
                         // check for transparency
                         let l_hit_mat = scene.materials.get(l_hit_result.mat).unwrap();
-                        if !l_hit_mat.alpha_texture.is_none() {
+                        if let Texture::Alpha(ref alpha_texture) = l_hit_mat.alpha_texture {
                             // transparency via alpha texture
-                            let a_texture = l_hit_mat.alpha_texture.as_ref().unwrap();
-                            let c = sample_texture(a_texture, &l_hit_result.tex);
+                            let c = sample_texture(alpha_texture, &l_hit_result.tex);
                             if c.3 == 0 {
                                 l_shadow = false;
                             }
-                        } else if !l_hit_mat.diffuse_texture.is_none() {
+                        } else if let Texture::Diffuse(ref diffuse_texture) = l_hit_mat.diffuse_texture  {
                             // transparency via diffuse texture
-                            let d_texture = l_hit_mat.diffuse_texture.as_ref().unwrap();
-                            let c = sample_texture(d_texture, &l_hit_result.tex);
+                            let c = sample_texture(diffuse_texture, &l_hit_result.tex);
                             if c.4 == 0 {
                                 l_shadow = false;
                             }

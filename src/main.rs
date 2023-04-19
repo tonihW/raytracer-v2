@@ -11,8 +11,9 @@ pub mod vertex;
 use bvh::{bvh::BVH};
 use clap::{arg, Command};
 use glam::{Vec3, Vec2};
-use image::{ImageBuffer, RgbImage, RgbaImage, GrayAlphaImage, ImageFormat, Rgb};
+use image::{ImageBuffer, RgbImage, ImageFormat, Rgb};
 use image::io::Reader as ImageReader;
+use material::{Texture, TextureType};
 use std::path::PathBuf;
 use std::thread::{self, ScopedJoinHandle};
 
@@ -25,11 +26,13 @@ use crate::{
     vertex::Vertex,
 };
 
-fn load_rgba_texture(model_file_name: &str, texture_name: &str) -> Option<RgbaImage> {
+fn load_texture(model_file_name: &str, texture_name: &str, texture_type: TextureType) -> Texture {
+    // return None if nothing to load
     if texture_name.is_empty() {
-        return None;
+        return Texture::None;
     }
 
+    // attempt to load file into memory
     let file_path = PathBuf::from(model_file_name)
         .parent()
         .unwrap()
@@ -40,33 +43,32 @@ fn load_rgba_texture(model_file_name: &str, texture_name: &str) -> Option<RgbaIm
         .unwrap()
         .decode()
         .unwrap();
-    match image.color().has_alpha() {
-        true => return Some(image.to_rgba8()),
-        false => {
-            let mut image_rgb = image.to_rgba8();
-            image_rgb.pixels_mut().for_each(|p| p[3] = 255);
-            return Some(image_rgb);
+
+    // return type based on condition
+    match texture_type {
+        TextureType::Diffuse => {
+            println!("loading diffuse texture ...");
+
+            match image.color().has_alpha() {
+                true => return Texture::Diffuse(image.to_rgba8()),
+                false => {
+                    let mut image_rgb = image.to_rgba8();
+                    image_rgb.pixels_mut().for_each(|p| p[3] = 255);
+                    return Texture::Diffuse(image_rgb);
+                },
+            }
+        },
+        TextureType::Alpha => {
+            println!("loading alpha texture ...");
+
+            return Texture::Alpha(image.to_luma_alpha8());
+        },
+        TextureType::None => {
+            println!("loading none texture ...");
+
+            return Texture::None;
         },
     }
-}
-
-fn load_alpha_texture(model_file_name: &str, texture_name: &str) -> Option<GrayAlphaImage> {
-    if texture_name.is_empty() {
-        return None;
-    }
-
-    let file_path = PathBuf::from(model_file_name)
-        .parent()
-        .unwrap()
-        .join(texture_name);
-    let file_path = String::from(file_path.to_str().unwrap())
-        .replace('\\', "/");
-    return Some(ImageReader::open(file_path)
-        .unwrap()
-        .decode()
-        .unwrap()
-        .to_luma_alpha8()
-    );
 }
 
 fn load_model(file_name: &str, scene: &mut Scene) {
@@ -111,8 +113,8 @@ fn load_model(file_name: &str, scene: &mut Scene) {
                 specular: Vec3::new(mat.specular[0], mat.specular[1], mat.specular[2]),
                 shininess: mat.shininess,
                 emission: Vec3::new(mat_emission[0], mat_emission[1], mat_emission[2]),
-                diffuse_texture: load_rgba_texture(file_name, &mat.diffuse_texture),
-                alpha_texture: load_alpha_texture(file_name, &mat.dissolve_texture),
+                diffuse_texture: load_texture(file_name, &mat.diffuse_texture, TextureType::Diffuse),
+                alpha_texture: load_texture(file_name, &mat.dissolve_texture, TextureType::Alpha),
             });
         }
 
