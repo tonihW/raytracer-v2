@@ -1,0 +1,32 @@
+{
+    "models": [
+        "./res/models/wirokit/wirokit.obj"
+    ],
+    "lights": [
+        {
+            "type": "AmbientLight",
+            "emission": [0.2, 0.2, 0.2]
+        },
+        {
+            "type": "PointLight",
+            "position": [0.5, 1.0, 0.0],
+            "emission": [2.0, 2.0, 2.0],
+            "c": 0.0,
+            "l": 0.0,
+            "q": 0.8
+        },
+        {
+            "type": "PointLight",
+            "position": [2.0, 1.0, -2.0],
+            "emission": [0.75, 0.5, 3.0],
+            "c": 0.0,
+            "l": 0.0,
+            "q": 0.5
+        }
+    ],
+    "camera": {
+        "position": [4.0, 0.5, 0.0],
+        "rot_axis": [0.0, 1.0, 0.0],
+        "rot_angle": -90.0
+    }
+}

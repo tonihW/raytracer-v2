@@ -9,8 +9,6 @@ use crate::{
 };
 
 const RESULT_NULL: Vec3 = Vec3::new(0.0, 0.0, 0.0);
-const RAYTRACER_LIGHT: Vec3 = Vec3::new(-0.2, -1.0, 0.2);
-const RAYTRACER_AMBIENT: Vec3 = Vec3::new(0.3, 0.4, 0.4);
 
 pub struct Raytracer;
 pub struct Pathtracer;
@@ -98,72 +96,77 @@ impl Raytracer {
                     d_color = Vec3::new(c.0, c.1, c.2);
                 }
                 
-                // check if in shadow
-                let l_ray = Ray::new(hit_result.pos + hit_result.nrm * EPSILON, -RAYTRACER_LIGHT.normalize());
-                let l_hits = bvh.traverse(&l_ray, &scene.shapes);
-                let mut l_hit_dist = f32::MAX;
-                let mut l_hit_isect: Option<Intersection> = None;
-                for l_hit in l_hits {
-                    match l_hit.intersect(&l_ray) {
+                // calculate shading by each light source
+                for light in &scene.lights {
+                    let we = light.eval_we(&hit_result.pos);
+                    let we_normalized = we.normalize();
+                    let le = light.eval_le(&we);
+
+                    // check if in shadow
+                    let l_ray = Ray::new(hit_result.pos + hit_result.nrm * EPSILON, -we_normalized);
+                    let l_hits = bvh.traverse(&l_ray, &scene.shapes);
+                    let mut l_hit_dist = f32::MAX;
+                    let mut l_hit_isect: Option<Intersection> = None;
+                    for l_hit in l_hits {
+                        match l_hit.intersect(&l_ray) {
+                            Some(l_hit_result) => {
+                                if l_hit_result.t < l_hit_dist {
+                                    l_hit_dist = l_hit_result.t;
+                                    l_hit_isect = Some(l_hit_result);
+                                }
+                            },
+                            None => (),
+                        }
+                    }
+
+                    let mut l_shadow = false;
+                    match l_hit_isect {
                         Some(l_hit_result) => {
-                            if l_hit_result.t < l_hit_dist {
-                                l_hit_dist = l_hit_result.t;
-                                l_hit_isect = Some(l_hit_result);
+                            // in shadow by default
+                            l_shadow = true;
+
+                            // check for transparency
+                            let l_hit_mat = scene.materials.get(l_hit_result.mat).unwrap();
+                            if let Texture::Alpha(ref alpha_texture) = l_hit_mat.alpha_texture {
+                                // transparency via alpha texture
+                                let c = sample_texture(alpha_texture, &l_hit_result.tex);
+                                if c.3 == 0 {
+                                    l_shadow = false;
+                                }
+                            } else if let Texture::Diffuse(ref diffuse_texture) = l_hit_mat.diffuse_texture  {
+                                // transparency via diffuse texture
+                                let c = sample_texture(diffuse_texture, &l_hit_result.tex);
+                                if c.4 == 0 {
+                                    l_shadow = false;
+                                }
                             }
                         },
                         None => (),
                     }
-                }
 
-                let mut l_shadow = false;
-                match l_hit_isect {
-                    Some(l_hit_result) => {
-                        // in shadow by default
-                        l_shadow = true;
+                    // pre-calc stuff
+                    let reflection = reflect(&we_normalized, &hit_result.nrm).normalize();
+                    
+                    // apply shading
+                    if !l_shadow {
+                        // diffuse
+                        let brdf_d = hit_mat.brdf_lambertian(&hit_result.nrm, &-we_normalized);
 
-                        // check for transparency
-                        let l_hit_mat = scene.materials.get(l_hit_result.mat).unwrap();
-                        if let Texture::Alpha(ref alpha_texture) = l_hit_mat.alpha_texture {
-                            // transparency via alpha texture
-                            let c = sample_texture(alpha_texture, &l_hit_result.tex);
-                            if c.3 == 0 {
-                                l_shadow = false;
-                            }
-                        } else if let Texture::Diffuse(ref diffuse_texture) = l_hit_mat.diffuse_texture  {
-                            // transparency via diffuse texture
-                            let c = sample_texture(diffuse_texture, &l_hit_result.tex);
-                            if c.4 == 0 {
-                                l_shadow = false;
-                            }
-                        }
-                    },
-                    None => (),
-                }
+                        // specular
+                        let brdf_s = hit_mat.brdf_phong(&reflection, &-ray.direction);
 
-                // pre-calc stuff
-                let light = RAYTRACER_LIGHT.normalize();
-                let reflection = reflect(&light, &hit_result.nrm).normalize();
-                
-                // apply shading
-                if !l_shadow {
-                    // diffuse
-                    let brdf_d = hit_mat.brdf_lambertian(&hit_result.nrm, &-light);
-
-                    // specular
-                    let brdf_s = hit_mat.brdf_phong(&reflection, &-ray.direction);
-
-                    result += d_color * brdf_d + d_color * brdf_s;
+                        result += le * (d_color * brdf_d + d_color * brdf_s);
+                    }
                 }
 
                 // ambient light
-                result += RAYTRACER_AMBIENT * d_color;
+                result += scene.ambient * d_color;
 
                 // emissive light
                 result += hit_mat.emission;
             },
             None => {
-                let r_dot_l = ray.direction.dot(-RAYTRACER_LIGHT.normalize());
-                result += RAYTRACER_AMBIENT + r_dot_l * RAYTRACER_AMBIENT;
+                result += scene.ambient;
             },
         }
         

@@ -1,3 +1,4 @@
 /target
-/res/**/*
+/res/models/*
+!/res/models/wirokit
 /render.png

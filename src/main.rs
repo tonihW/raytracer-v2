@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod intersection;
 pub mod material;
+pub mod light;
 pub mod renderer;
 pub mod scene;
 pub mod triangle;
@@ -15,9 +16,11 @@ use glam::{Vec3, Vec2};
 use image::{ImageBuffer, RgbImage, ImageFormat, Rgb};
 use image::io::Reader as ImageReader;
 use material::{Texture, TextureType};
+use std::fs;
 use std::path::PathBuf;
 use std::thread::{self, ScopedJoinHandle};
 
+use crate::light::{DirLight, PointLight};
 use crate::scene::Scene;
 use crate::{
     camera::Camera,
@@ -204,59 +207,141 @@ fn main() {
                 .value_parser(clap::value_parser!(u32))
         )
         .arg(
-            arg!(--model <MODEL>)
+            arg!(--scene <SCENE>)
                 .required(false)
-                .default_value("./res/wirokit.obj")
+                .default_value("./res/wirokit.json")
                 .value_parser(clap::value_parser!(String))
-        )
-        .arg(
-            arg!(--cam_pos <CAM_POS>)
-                .required(false)
-                .default_value("0.0 0.0 0.0")
-                .value_parser(clap::value_parser!(String))
-        )
-        .arg(
-            arg!(--cam_axis <CAM_AXIS>)
-                .required(false)
-                .default_value("0.0 1.0 0.0")
-                .value_parser(clap::value_parser!(String))
-        )
-        .arg(
-            arg!(--cam_angle <CAM_ANGLE>)
-                .required(false)
-                .default_value("0.0")
-                .value_parser(clap::value_parser!(f32))
         )
         .get_matches();
     let arg_width = args.get_one::<u32>("width").unwrap();
     let arg_height = args.get_one::<u32>("height").unwrap();
-    let arg_model = args.get_one::<String>("model").unwrap();
-    let arg_cam_pos = args.get_one::<String>("cam_pos")
-        .map_or("0.0 0.0 0.0", String::as_str)
-        .split(" ")
-        .map(|s| s.parse::<f32>().unwrap())
-        .collect::<Vec<_>>();
-    let arg_cam_axis = args.get_one::<String>("cam_axis")
-        .map_or("0.0 0.0 0.0", String::as_str)
-        .split(" ")
-        .map(|s| s.parse::<f32>().unwrap())
-        .collect::<Vec<_>>();
-    let arg_cam_angle = args.get_one::<f32>("cam_angle").unwrap();
+    let arg_scene = args.get_one::<String>("scene").unwrap();
 
     // final render buffer
     let mut render_buf: RgbImage = ImageBuffer::new(*arg_width, *arg_height);
 
+    // load scene file
+    let scene_json_file = fs::File::open(arg_scene)
+        .expect("Failed to load target scene JSON file");
+    let scene_json: serde_json::Value = serde_json::from_reader(scene_json_file)
+        .expect("Failed to parse target scene JSON file");
+
+    // load camera params
+    let camera_json = scene_json.get("camera")
+        .expect("camera is a mandatory field for a scene JSON file");
+    let camera_pos: Vec<f32> = camera_json.get("position")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_f64().unwrap() as f32)
+        .collect();
+    let camera_axis: Vec<f32> = camera_json.get("rot_axis")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_f64().unwrap() as f32)
+        .collect();
+    let camera_angle = camera_json.get("rot_angle")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+
     // init scene
     let mut scene = Scene::new(Camera::from_axis_angle(
-        Vec3 { x: arg_cam_pos[0], y: arg_cam_pos[1], z: arg_cam_pos[2] },
-        Vec3 { x: arg_cam_axis[0], y: arg_cam_axis[1], z: arg_cam_axis[2] },
-        std::f32::consts::PI / 180.0 * *arg_cam_angle,
+        Vec3 { x: camera_pos[0] , y: camera_pos[1], z: camera_pos[2] },
+        Vec3 { x: camera_axis[0], y: camera_axis[1], z: camera_axis[2] },
+        std::f32::consts::PI / 180.0 * camera_angle as f32,
         *arg_width as f32,
         *arg_height as f32
     ));
 
     // load models and materials
-    load_model(arg_model, &mut scene);
+    for model in scene_json["models"].as_array().unwrap() {
+        load_model(model.as_str().unwrap(), &mut scene);
+    }
+
+    // load lights
+    for light in scene_json["lights"].as_array().unwrap() {
+        let light_type = light.get("type")
+            .unwrap()
+            .as_str()
+            .unwrap();
+
+        println!("loading light of type \"{light_type}\"");
+        match light_type {
+            "AmbientLight" => {
+                let light_emission: Vec<f32> = light.get("emission")
+                    .unwrap()
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_f64().unwrap() as f32)
+                    .collect();
+
+                scene.ambient = Vec3::new(light_emission[0], light_emission[1], light_emission[2]);
+            },
+            "DirLight" => {
+                let light_direction: Vec<f32> = light.get("direction")
+                    .unwrap()
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_f64().unwrap() as f32)
+                    .collect();
+                let light_emission: Vec<f32> = light.get("emission")
+                    .unwrap()
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_f64().unwrap() as f32)
+                    .collect();
+
+                scene.lights.push(Box::new(DirLight {
+                    direction: Vec3::new(light_direction[0], light_direction[1], light_direction[2]),
+                    emission: Vec3::new(light_emission[0], light_emission[1], light_emission[2]),
+                }));
+            },
+            "PointLight" => {
+                let light_position: Vec<f32> = light.get("position")
+                    .unwrap()
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_f64().unwrap() as f32)
+                    .collect();
+                let light_emission: Vec<f32> = light.get("emission")
+                    .unwrap()
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_f64().unwrap() as f32)
+                    .collect();
+                let light_c = light.get("c")
+                    .unwrap()
+                    .as_f64()
+                    .unwrap();
+                let light_l = light.get("l")
+                    .unwrap()
+                    .as_f64()
+                    .unwrap();
+                let light_q = light.get("q")
+                    .unwrap()
+                    .as_f64()
+                    .unwrap();
+
+                scene.lights.push(Box::new(PointLight {
+                    position: Vec3::new(light_position[0], light_position[1], light_position[2]),
+                    emission: Vec3::new(light_emission[0], light_emission[1], light_emission[2]),
+                    c: light_c as f32,
+                    l: light_l as f32,
+                    q: light_q as f32,
+                }));
+            },
+            _ => ()
+        }
+    }
 
     // construct scene
     println!("constructing scene, shape_count: {} ...", scene.shapes.len());
