@@ -37,8 +37,9 @@ fn load_texture(model_file_name: &str, texture_name: &str, texture_type: Texture
     let file_path = PathBuf::from(model_file_name)
         .parent()
         .unwrap()
-        .join(texture_name);
-    let file_path = String::from(file_path.to_str().unwrap())
+        .join(texture_name)
+        .to_str()
+        .unwrap()
         .replace('\\', "/");
     let image = ImageReader::open(file_path)
         .unwrap()
@@ -134,12 +135,19 @@ fn load_model(file_name: &str, scene: &mut Scene) {
         let mut vertices: Vec<Vertex> = Vec::new();
         for i in 0..m.mesh.indices.len() {
             let p_offset = (m.mesh.indices[i] * 3) as usize;
-            let n_offset = (m.mesh.normal_indices[i] * 3) as usize;
-            let t_offset = (m.mesh.texcoord_indices[i] * 2) as usize;
-
             let pos = Vec3::new(m.mesh.positions[p_offset + 0], m.mesh.positions[p_offset + 1], m.mesh.positions[p_offset + 2]);
-            let nrm = Vec3::new(m.mesh.normals[n_offset + 0], m.mesh.normals[n_offset + 1], m.mesh.normals[n_offset + 2]);
-            let tex = Vec2::new(m.mesh.texcoords[t_offset + 0], m.mesh.texcoords[t_offset + 1]);
+
+            let mut nrm = Vec3::new(0.0, 0.0, 0.0);
+            if m.mesh.normal_indices.len() > 0 {
+                let n_offset = (m.mesh.normal_indices[i] * 3) as usize;
+                nrm = Vec3::new(m.mesh.normals[n_offset + 0], m.mesh.normals[n_offset + 1], m.mesh.normals[n_offset + 2]);
+            }
+
+            let mut tex = Vec2::new(0.0, 0.0);
+            if m.mesh.texcoord_indices.len() > 0 {
+                let t_offset = (m.mesh.texcoord_indices[i] * 2) as usize;
+                tex = Vec2::new(m.mesh.texcoords[t_offset + 0], m.mesh.texcoords[t_offset + 1]);
+            }
 
             vertices.push(Vertex {
                 pos,
@@ -147,8 +155,18 @@ fn load_model(file_name: &str, scene: &mut Scene) {
                 tex,
             });
         }
+        
+        for v in vertices.chunks_exact_mut(3) {
+            // calculate normals if not set
+            if v[0].nrm.length() == 0.0 && v[1].nrm.length() == 0.0 && v[2].nrm.length() == 0.0 {
+                let edge_a = v[0].pos - v[1].pos;
+                let edge_b = v[0].pos - v[2].pos;
+                let nrm = edge_a.cross(edge_b).normalize();
+                v[0].nrm = nrm;
+                v[1].nrm = nrm;
+                v[2].nrm = nrm;
+            }
 
-        for v in vertices.chunks_exact(3) {
             let t = Triangle {
                 vrt: [
                     v[0],
