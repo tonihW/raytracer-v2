@@ -1,6 +1,6 @@
-# pathtracer
+# raytracer-v2
 
-Raytracer / pathtracer 3D renderer, written in Rust for learning purposes.
+Raytracer 3D renderer, written in Rust for learning purposes.
 
 # Example renders
 

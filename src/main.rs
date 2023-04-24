@@ -190,7 +190,7 @@ fn load_model(file_name: &str, scene: &mut Scene) {
 
 fn main() {
     // parse args
-    let args = Command::new("pathtracer")
+    let args = Command::new("raytracer-v2")
         .version("0.1.0")
         .author("tonihW")
         .about("Simple 3D renderer based on raytracing")
