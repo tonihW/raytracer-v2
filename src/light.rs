@@ -30,7 +30,7 @@ impl Light for DirLight {
 
 impl Light for PointLight {
     fn eval_we(&self, p: &Vec3) -> Vec3 {
-        return -(self.position - *p);
+        return *p - self.position;
     }
 
     fn eval_le(&self, we: &Vec3) -> Vec3 {

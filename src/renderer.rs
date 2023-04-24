@@ -104,8 +104,9 @@ impl Raytracer {
 
                     // check if in shadow
                     let l_ray = Ray::new(hit_result.pos + hit_result.nrm * EPSILON, -we_normalized);
+                    let l_maxt = we.length();
                     let l_hits = bvh.traverse(&l_ray, &scene.shapes);
-                    let mut l_hit_dist = f32::MAX;
+                    let mut l_hit_dist = l_maxt;
                     let mut l_hit_isect: Option<Intersection> = None;
                     for l_hit in l_hits {
                         match l_hit.intersect(&l_ray) {
