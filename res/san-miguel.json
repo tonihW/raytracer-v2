@@ -1,0 +1,24 @@
+{
+    "models": [
+        "./res/models/san-miguel/san-miguel-low-poly.obj"
+    ],
+    "lights": [
+        {
+            "type": "AmbientLight",
+            "emission": [0.3, 0.3, 0.3]
+        },
+        {
+            "type": "PointLight",
+            "position": [8.0, 2.0, 8.0],
+            "emission": [1.0, 1.0, 1.0],
+            "c": 0.0,
+            "l": 0.1,
+            "q": 0.5
+        }
+    ],
+    "camera": {
+        "position": [10.0, 1.0, 10.0],
+        "rot_axis": [0.0, 1.0, 0.0],
+        "rot_angle": -130.0
+    }
+}

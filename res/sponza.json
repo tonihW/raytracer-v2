@@ -1,6 +1,6 @@
 {
     "models": [
-        "./res/models/wirokit/wirokit.obj"
+        "./res/models/crytek-sponza/sponza.obj"
     ],
     "lights": [
         {
@@ -9,23 +9,23 @@
         },
         {
             "type": "PointLight",
-            "position": [1.0, 1.0, 0.0],
-            "emission": [2.0, 2.0, 2.0],
+            "position": [-500.0, 250.0, 0.0],
+            "emission": [1.0, 1.0, 1.0],
             "c": 0.0,
-            "l": 0.2,
-            "q": 0.8
+            "l": 0.00001,
+            "q": 0.00002
         },
         {
             "type": "PointLight",
-            "position": [2.0, 1.0, -2.0],
-            "emission": [0.75, 0.5, 3.0],
+            "position": [-1000.0, 125.0, 0.0],
+            "emission": [1.0, 1.0, 1.0],
             "c": 0.0,
-            "l": 0.1,
-            "q": 0.5
+            "l": 0.00001,
+            "q": 0.00002
         }
     ],
     "camera": {
-        "position": [4.0, 0.5, 0.0],
+        "position": [500.0, 100.0, 0.0],
         "rot_axis": [0.0, 1.0, 0.0],
         "rot_angle": -90.0
     }
